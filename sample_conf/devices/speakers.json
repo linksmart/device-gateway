@@ -1,0 +1,34 @@
+{
+  "name": "AudioDevice",
+  "description": "This actuator allows to generate speech from a given text and play on the speakers connected to the gateway",
+  "meta": {},
+  "ttl": 60,
+  "resources": [
+    {
+      "type": "Resource",
+      "name": "TTS",
+      "meta": {},
+      "agent": {
+        "type": "task",
+        "dir": null,
+        "exec": "agent-examples/speakers/say.sh"
+      },
+      "representation": {
+        "text/plain": {
+          "type": "string"
+        }
+      },
+      "protocols": [
+        {
+          "type": "REST",
+          "methods": [
+            "PUT"
+          ],
+          "content-types": [
+            "text/plain"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "name": "DummyDevice",
+  "description": "Just a test of DGW",
+  "meta": {"any":"key", "kind":"dummy"},
+  "ttl": 30,
+  "resources": [
+    {
+      "type": "Resource",
+      "name": "RandomStream",
+      "meta": {},
+      "agent": {
+        "type": "service",
+        "dir": null,
+        "exec": "while true; do echo $RANDOM; sleep 3; done"
+      },
+      "representation": {
+        "text/plain": {
+          "type": "number"
+        }
+      },
+      "protocols": [
+        {
+          "type": "REST",
+          "methods": [
+            "GET"
+          ],
+          "content-types": [
+            "text/plain"
+          ]
+        }
+      ]
+    }
+  ]
+}

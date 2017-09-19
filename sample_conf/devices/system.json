@@ -1,0 +1,128 @@
+{
+  "name": "System",
+  "description": "This device reports system metrics from a computer running a gateway",
+  "meta": {},
+  "ttl": 30,
+  "resources": [
+    {
+      "type": "Resource",
+      "name": "PS",
+      "meta": {},
+      "agent": {
+        "type": "timer",
+        "interval": 5,
+        "dir": null,
+        "exec": "agent-examples/system/processes.sh"
+      },
+      "representation": {
+        "application/json": {
+          "$schema": "http://json-schema.org/draft-04/schema#",
+          "title": "ProcessCount",
+          "description": "Total number of processes at the certain time",
+          "type": "object",
+          "properties": {
+            "count": {
+              "description": "Number of processes",
+              "type": "integer"
+            },
+            "timestamp": {
+              "description": "Linux timestamp of count measurement time",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "count",
+            "timestamp"
+          ]
+        }
+      },
+      "protocols": [
+        {
+          "type": "REST",
+          "methods": [
+            "GET"
+          ],
+          "content-types": [
+            "application/json"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Resource",
+      "name": "LoadAverage",
+      "meta": {},
+      "agent": {
+        "type": "timer",
+        "interval": 30,
+        "dir": null,
+        "exec": "agent-examples/system/loadaverage.sh"
+      },
+      "representation": {
+        "text/plain": {
+          "type": "string"
+        }
+      },
+      "protocols": [
+        {
+          "type": "REST",
+          "methods": [
+            "GET"
+          ],
+          "content-types": [
+            "text/plain"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Resource",
+      "name": "DiskUsage",
+      "meta": {},
+      "agent": {
+        "type": "task",
+        "interval": null,
+        "dir": null,
+        "exec": "python agent-examples/system/diskspace.py"
+      },
+      "representation": {
+        "application/json": {
+          "$schema": "http://json-schema.org/draft-04/schema#",
+          "title": "DiskUsage",
+          "description": "Disk usage document description",
+          "type": "object",
+          "properties": {
+            "total": {
+              "description": "Total disk usage",
+              "type": "integer"
+            },
+            "free": {
+              "description": "Free disk space",
+              "type": "integer"
+            },
+            "used": {
+              "description": "Used disk space",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "total",
+            "free",
+            "used"
+          ]
+        }
+      },
+      "protocols": [
+        {
+          "type": "REST",
+          "methods": [
+            "GET"
+          ],
+          "content-types": [
+            "application/json"
+          ]
+        }
+      ]
+    }
+  ]
+}

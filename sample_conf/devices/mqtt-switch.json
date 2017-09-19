@@ -1,0 +1,42 @@
+{
+  "name": "MQTTSwitch",
+  "description": "MQTT test switch service",
+  "meta": {},
+  "ttl": 120,
+  "resources": [
+    {
+      "type": "Resource",
+      "name": "Switch",
+      "agent": {
+        "type": "service",
+        "dir": null,
+        "exec": "agent-examples/mqtt-switch/switch.sh"
+      },
+      "representation": {},
+      "protocols": [
+        {
+          "type": "MQTT",
+          "methods": [
+            "PUB",
+            "SUB"
+          ],
+          "content-types": [
+            "text/plain"
+          ],
+          "pub_topic": "/test/switch/pub",
+          "sub_topic": "/test/switch/sub"
+        },
+        {
+          "type": "REST",
+          "methods": [
+            "GET",
+            "PUT"
+          ],
+          "content-types": [
+            "text/plain"
+          ]
+        }
+      ]
+    }
+  ]
+}
