@@ -7,15 +7,10 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/oleksandr/bonjour"
-	"github.com/syndtr/goleveldb/leveldb/opt"
-
-	utils "linksmart.eu/lc/core/catalog"
-	catalog "linksmart.eu/lc/core/catalog/resource"
 )
 
 var (
@@ -56,42 +51,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Setup Storage backend
-	var (
-		catalogStorage catalog.CatalogStorage
-	)
-	// use memory storage if not defined otherwise
-	switch config.Storage.Type {
-	case "", utils.CatalogBackendMemory:
-		catalogStorage = catalog.NewMemoryStorage()
-	case utils.CatalogBackendLevelDB:
-		tempDir := fmt.Sprintf("%s/lslc/dgw-%d.ldb", strings.Replace(os.TempDir(), "\\", "/", -1), time.Now().UnixNano())
-		defer os.RemoveAll(tempDir)
-
-		catalogStorage, err = catalog.NewLevelDBStorage(tempDir, &opt.Options{Compression: opt.NoCompression})
-		if err != nil {
-			logger.Fatalf("Failed to start LevelDB storage: %v\n", err.Error())
-		}
-	default:
-		logger.Fatalf("Could not create catalog API storage. Unsupported type: %v\n", config.Storage.Type)
-	}
-
-	catalogController, err := catalog.NewController(catalogStorage, CatalogLocation)
-	if err != nil {
-		logger.Printf("Failed to start the controller: %v", err.Error())
-		catalogStorage.Close()
-		os.Exit(1)
-	}
-
-	go restServer.start(catalogController)
+	go restServer.start()
 
 	// Parse device configurations
 	devices := configureDevices(config)
-	// register in local catalog
-	err = registerInLocalCatalog(devices, catalogController)
-	if err != nil {
-		logger.Fatalf("Failed to register in local catalog: %v\n", err.Error())
-	}
+
 	// register in remote catalogs
 	regChannels, wg := registerInRemoteCatalog(devices, config)
 
@@ -136,12 +100,6 @@ func main() {
 	agentManager.stop()
 	if mqttConnector != nil {
 		mqttConnector.stop()
-	}
-
-	// Shutdown catalog API
-	err = catalogStorage.Close()
-	if err != nil {
-		logger.Println(err.Error())
 	}
 
 	// Unregister in the remote catalog(s)

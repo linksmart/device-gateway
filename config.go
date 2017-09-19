@@ -13,8 +13,7 @@ import (
 	"strings"
 	"time"
 
-	utils "linksmart.eu/lc/core/catalog"
-	"linksmart.eu/lc/sec/authz"
+	"code.linksmart.eu/com/go-sec/authz"
 )
 
 //
@@ -108,7 +107,6 @@ type Config struct {
 	StaticDir      string                       `json:"staticDir`
 	Catalog        []Catalog                    `json:"catalog"`
 	Http           HttpConfig                   `json:"http"`
-	Storage        StorageConfig                `json:"storage"`
 	Protocols      map[ProtocolType]interface{} `json:"protocols"`
 	Devices        []Device                     `json:"devices"`
 	Auth           ValidatorConf                `json:"auth"`
@@ -127,12 +125,6 @@ func (c *Config) Validate() error {
 
 	// Check if HTTP configuration is valid
 	err = c.Http.Validate()
-	if err != nil {
-		return err
-	}
-
-	// Check if Storage configuration is valid
-	err = c.Storage.Validate()
 	if err != nil {
 		return err
 	}
@@ -222,25 +214,6 @@ type HttpConfig struct {
 func (h *HttpConfig) Validate() error {
 	if h.BindAddr == "" || h.BindPort == 0 {
 		return fmt.Errorf("HTTP bindAddr and bindPort have to be defined")
-	}
-	return nil
-}
-
-//
-// Storage config
-//
-type StorageConfig struct {
-	Type string `json:"type"`
-}
-
-var supportedBackends = map[string]bool{
-	utils.CatalogBackendMemory:  true,
-	utils.CatalogBackendLevelDB: true,
-}
-
-func (c *StorageConfig) Validate() error {
-	if c.Type != "" && !supportedBackends[c.Type] {
-		return fmt.Errorf("Unsupported storage backend")
 	}
 	return nil
 }

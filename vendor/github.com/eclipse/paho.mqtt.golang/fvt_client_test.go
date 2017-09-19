@@ -866,6 +866,7 @@ func Test_PublishEmptyMessage(t *testing.T) {
 	wait(choke)
 
 	p.Disconnect(250)
+	s.Disconnect(250)
 }
 
 // func Test_Cleanstore(t *testing.T) {
@@ -962,14 +963,14 @@ func Test_ping1_idle5(t *testing.T) {
 	ops.SetConnectionLostHandler(func(c Client, err error) {
 		t.Fatalf("Connection-lost handler was called: %s", err)
 	})
-	ops.SetKeepAlive(2 * time.Second)
+	ops.SetKeepAlive(3 * time.Second)
 
 	c := NewClient(ops)
 
 	if token := c.Connect(); token.Wait() && token.Error() != nil {
 		t.Fatalf("Error on Client.Connect(): %v", token.Error())
 	}
-	time.Sleep(5 * time.Second)
+	time.Sleep(8 * time.Second)
 	c.Disconnect(250)
 }
 
@@ -1029,10 +1030,8 @@ func Test_cleanUpMids(t *testing.T) {
 		t.Fail()
 	}
 
-	for i, token := range c.(*client).messageIds.index {
-		if token != nil {
-			t.Fatalf("Should have cleaned up messageIDs, slot %d still has token", i)
-		}
+	if len(c.(*client).messageIds.index) > 0 {
+		t.Fatalf("Should have cleaned up messageIDs, have %d left", len(c.(*client).messageIds.index))
 	}
 	if token.Error() == nil {
 		t.Fatal("token should have received an error on connection loss")

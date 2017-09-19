@@ -6,10 +6,9 @@ import (
 	"fmt"
 	"sync"
 
-	catalog "linksmart.eu/lc/core/catalog/resource"
-
-	_ "linksmart.eu/lc/sec/auth/cas/obtainer"
-	"linksmart.eu/lc/sec/auth/obtainer"
+	_ "code.linksmart.eu/com/go-sec/auth/keycloak/obtainer"
+	"code.linksmart.eu/com/go-sec/auth/obtainer"
+	catalog "code.linksmart.eu/rc/resource-catalog/catalog"
 )
 
 // Parses config into a slice of configured devices
@@ -18,7 +17,7 @@ func configureDevices(config *Config) []catalog.Device {
 	restConfig, _ := config.Protocols[ProtocolTypeREST].(RestProtocol)
 	for _, device := range config.Devices {
 		r := new(catalog.Device)
-		r.Type = catalog.ApiDeviceType
+		r.Type = "Device"
 		r.Ttl = device.Ttl
 		r.Name = device.Name
 		r.Description = device.Description
@@ -27,7 +26,7 @@ func configureDevices(config *Config) []catalog.Device {
 		r.Resources = []catalog.Resource{}
 		for _, resource := range device.Resources {
 			res := new(catalog.Resource)
-			res.Type = catalog.ApiResourceType
+			res.Type = "Resource"
 			res.Name = resource.Name
 			res.Meta = resource.Meta
 			res.Representation = resource.Representation
@@ -68,20 +67,6 @@ func configureDevices(config *Config) []catalog.Device {
 		devices = append(devices, *r)
 	}
 	return devices
-}
-
-// Register configured devices from a given configuration using provided controller
-func registerInLocalCatalog(devices []catalog.Device, controller catalog.CatalogController) error {
-	client := catalog.NewLocalCatalogClient(controller)
-
-	for _, r := range devices {
-		r.Ttl = 0
-		err := catalog.RegisterDevice(client, &r)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func registerInRemoteCatalog(devices []catalog.Device, config *Config) ([]chan<- bool, *sync.WaitGroup) {

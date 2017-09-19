@@ -9,16 +9,14 @@ import (
 	"mime"
 	"net/http"
 	"path/filepath"
+	"strings"
 
+	_ "code.linksmart.eu/com/go-sec/auth/keycloak/validator"
+	"code.linksmart.eu/com/go-sec/auth/validator"
 	"github.com/codegangsta/negroni"
 	"github.com/gorilla/context"
 	"github.com/gorilla/mux"
 	"github.com/justinas/alice"
-	catalog "linksmart.eu/lc/core/catalog/resource"
-
-	_ "linksmart.eu/lc/sec/auth/cas/validator"
-	"linksmart.eu/lc/sec/auth/validator"
-	"strings"
 )
 
 // errorResponse used to serialize errors into JSON for RESTful responses
@@ -72,8 +70,7 @@ func newRESTfulAPI(conf *Config, dataCh chan<- DataRequest) (*RESTfulAPI, error)
 }
 
 // Setup all routers, handlers and start a HTTP server (blocking call)
-func (api *RESTfulAPI) start(catalogController catalog.CatalogController) {
-	api.mountCatalog(catalogController)
+func (api *RESTfulAPI) start() {
 	api.mountResources()
 
 	api.router.Methods("GET", "POST").Path("/dashboard").Handler(
@@ -180,38 +177,6 @@ func (api *RESTfulAPI) mountResources() {
 			}
 		}
 	}
-}
-
-func (api *RESTfulAPI) mountCatalog(catalogController catalog.CatalogController) {
-	catalogAPI := catalog.NewReadableCatalogAPI(
-		catalogController,
-		CatalogLocation,
-		StaticLocation,
-		fmt.Sprintf("Local catalog at %s", api.config.Description),
-	)
-
-	// Configure routers
-	api.router.Methods("GET").Path(CatalogLocation).Handler(api.commonHandlers.ThenFunc(catalogAPI.Index))
-
-	// Devices
-	// CRUD
-	api.router.Methods("GET").Path(CatalogLocation + "/devices/{id}").Handler(
-		api.commonHandlers.ThenFunc(catalogAPI.Get))
-	// Listing, filtering
-	api.router.Methods("GET").Path(CatalogLocation + "/devices").Handler(
-		api.commonHandlers.ThenFunc(catalogAPI.List))
-	api.router.Methods("GET").Path(CatalogLocation + "/devices/{path}/{op}/{value:.*}").Handler(
-		api.commonHandlers.ThenFunc(catalogAPI.Filter))
-
-	// Resources
-	api.router.Methods("GET").Path(CatalogLocation + "/resources").Handler(
-		api.commonHandlers.ThenFunc(catalogAPI.ListResources))
-	api.router.Methods("GET").Path(CatalogLocation + "/resources/{id:[^/]+/?[^/]*}").Handler(
-		api.commonHandlers.ThenFunc(catalogAPI.GetResource))
-	api.router.Methods("GET").Path(CatalogLocation + "/resources/{path}/{op}/{value:.*}").Handler(
-		api.commonHandlers.ThenFunc(catalogAPI.FilterResources))
-
-	logger.Printf("RESTfulAPI.mountCatalog() Mounted local catalog at %v", CatalogLocation)
 }
 
 func (api *RESTfulAPI) createResourceGetHandler(resourceId string) http.HandlerFunc {

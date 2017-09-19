@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"code.linksmart.eu/sc/service-catalog/discovery"
+	"code.linksmart.eu/sc/service-catalog/service"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
-	"linksmart.eu/lc/core/catalog"
-	"linksmart.eu/lc/core/catalog/service"
 )
 
 // MQTTConnector provides MQTT protocol connectivity
@@ -154,7 +154,7 @@ func (c *MQTTConnector) messageHandler(client MQTT.Client, msg MQTT.Message) {
 }
 
 func (c *MQTTConnector) discoverBrokerEndpoint() error {
-	endpoint, err := catalog.DiscoverCatalogEndpoint(service.DNSSDServiceType)
+	endpoint, err := discovery.DiscoverCatalogEndpoint(service.DNSSDServiceType)
 	if err != nil {
 		return err
 	}
