@@ -1,6 +1,11 @@
-### LinkSmart LocalConnect Core
-Code of the core components of LinkSmart LocalConnect
+# LinkSmart Device Gateway
 
-See wiki on how to [get started](https://linksmart.eu/redmine/projects/linksmart-local-connect/wiki/Source_Code?parent=Wiki):
+## Compile from source
+```
+git clone https://code.linksmart.eu/scm/con/device-gateway.git src/code.linksmart.eu/con/device-gateway
+export GOPATH=`pwd`
+go install code.linksmart.eu/con/device-gateway
+```
 
-
+## Development
+The dependencies of this package are managed by [dep](https://github.com/golang/dep).
