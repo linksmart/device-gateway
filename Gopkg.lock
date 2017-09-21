@@ -10,7 +10,7 @@
 [[projects]]
   branch = "master"
   name = "code.linksmart.eu/rc/resource-catalog"
-  packages = [".","catalog"]
+  packages = ["catalog"]
   revision = "b60f51762bdea4d051844602b74bfdcdfddc87be"
 
 [[projects]]
@@ -80,6 +80,12 @@
   revision = "5dcf00d8b228be86307f952f550f2191d956b9e2"
 
 [[projects]]
+  name = "github.com/satori/go.uuid"
+  packages = ["."]
+  revision = "879c5887cd475cd7864858769793b2ceb0d44feb"
+  version = "v1.1.0"
+
+[[projects]]
   branch = "master"
   name = "github.com/syndtr/goleveldb"
   packages = ["leveldb","leveldb/cache","leveldb/comparer","leveldb/errors","leveldb/filter","leveldb/iterator","leveldb/journal","leveldb/memdb","leveldb/opt","leveldb/storage","leveldb/table","leveldb/util"]
@@ -94,6 +100,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "0a1684ea0fa4b0c04f6bd81735ea33e8fa55f7bca9c4ab403706d3dff89c7361"
+  inputs-digest = "94075de1cc35a72baf8cc9205c730cc400d2f3ec26dcc79d6717e84b2a47790d"
   solver-name = "gps-cdcl"
   solver-version = 1

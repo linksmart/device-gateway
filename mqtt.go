@@ -13,6 +13,7 @@ import (
 	"code.linksmart.eu/sc/service-catalog/discovery"
 	"code.linksmart.eu/sc/service-catalog/service"
 	MQTT "github.com/eclipse/paho.mqtt.golang"
+	"github.com/satori/go.uuid"
 )
 
 // MQTTConnector provides MQTT protocol connectivity
@@ -26,8 +27,6 @@ type MQTTConnector struct {
 	pubTopics       map[string]string
 	subTopicsRvsd   map[string]string // store SUB topics "reversed" to optimize lookup in messageHandler
 }
-
-const defaultQoS = 1
 
 func newMQTTConnector(conf *Config, dataReqCh chan<- DataRequest) *MQTTConnector {
 	// Check if we need to publish to MQTT
@@ -68,7 +67,7 @@ func newMQTTConnector(conf *Config, dataReqCh chan<- DataRequest) *MQTTConnector
 	// Create and return connector
 	connector := &MQTTConnector{
 		config:          &config,
-		clientID:        fmt.Sprintf("%v-%v", conf.Id, time.Now().Unix()),
+		clientID:        fmt.Sprintf("%v-%v", conf.Id, uuid.NewV1()),
 		pubCh:           make(chan AgentResponse, 100), // buffer to compensate for pub latencies
 		offlineBufferCh: make(chan AgentResponse, config.OfflineBuffer),
 		subCh:           dataReqCh,
@@ -126,7 +125,7 @@ func (c *MQTTConnector) publisher() {
 			continue
 		}
 		topic := c.pubTopics[resp.ResourceId]
-		c.client.Publish(topic, byte(defaultQoS), false, resp.Payload)
+		c.client.Publish(topic, byte(MQTTDefaultQoS), false, resp.Payload)
 		logger.Println("MQTTConnector.publisher() published to", topic)
 	}
 }
@@ -219,8 +218,11 @@ func (c *MQTTConnector) connect(backOff int) {
 		logger.Printf("MQTTConnector.connect() failed to connect: %v\n", token.Error().Error())
 		if backOff == 0 {
 			backOff = 10
-		} else if backOff <= 600 {
+		} else if backOff <= MQTTMaxReconnectInterval {
 			backOff *= 2
+			if backOff > MQTTMaxReconnectInterval {
+				backOff = MQTTMaxReconnectInterval
+			}
 		}
 	}
 
@@ -238,7 +240,7 @@ func (c *MQTTConnector) onConnected(client MQTT.Client) {
 		topicFilters := make(map[string]byte)
 		for topic, _ := range c.subTopicsRvsd {
 			logger.Printf("MQTTPulbisher.onConnected() will subscribe to topic %s", topic)
-			topicFilters[topic] = defaultQoS
+			topicFilters[topic] = MQTTDefaultQoS
 		}
 		client.SubscribeMultiple(topicFilters, c.messageHandler)
 	} else {
@@ -252,7 +254,7 @@ func (c *MQTTConnector) onConnected(client MQTT.Client) {
 			continue
 		}
 		topic := c.pubTopics[resp.ResourceId]
-		c.client.Publish(topic, byte(defaultQoS), false, resp.Payload)
+		c.client.Publish(topic, byte(MQTTDefaultQoS), false, resp.Payload)
 		logger.Printf("MQTTConnector.onConnected() published buffered message to %s (%d/%d)", topic, len(c.offlineBufferCh)+1, c.config.OfflineBuffer)
 		if len(c.offlineBufferCh) == 0 {
 			break
@@ -276,8 +278,7 @@ func (c *MQTTConnector) configureMqttConnection() {
 		SetCleanSession(true).
 		SetConnectionLostHandler(c.onConnectionLost).
 		SetOnConnectHandler(c.onConnected).
-		SetMaxReconnectInterval(30 * time.Second).
-		SetAutoReconnect(false) // we take care of re-connect ourselves
+		SetAutoReconnect(false) // we take care of re-connect ourselves -> paho's MaxReconnectInterval has no effect
 
 	// Username/password authentication
 	if c.config.Username != "" {

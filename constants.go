@@ -17,6 +17,7 @@ const (
 	// Static resources URL mounting point
 	StaticLocation = "/static"
 
-	// Device Catalog URL mounting point
-	CatalogLocation = "/rc"
+	// MQTT
+	MQTTDefaultQoS           = 1
+	MQTTMaxReconnectInterval = 60
 )
