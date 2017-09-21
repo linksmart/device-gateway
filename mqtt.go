@@ -225,13 +225,10 @@ func (c *MQTTConnector) connect(backOff int) {
 			}
 		}
 	}
-
-	logger.Printf("MQTTConnector.connect() connected to the broker %v", c.config.URL)
-	return
 }
 
 func (c *MQTTConnector) onConnected(client MQTT.Client) {
-	logger.Printf("MQTTPulbisher.onConnected() Connected.")
+	logger.Printf("MQTTPulbisher.onConnected() connected to the broker %v", c.config.URL)
 
 	// subscribe if there is at least one resource with SUB in MQTT protocol is configured
 	if len(c.subTopicsRvsd) > 0 {
