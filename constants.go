@@ -21,3 +21,9 @@ const (
 	MQTTDefaultQoS           = 1
 	MQTTMaxReconnectInterval = 60
 )
+
+const LINKSMART = `
+╦   ╦ ╔╗╔ ╦╔═  ╔═╗ ╔╦╗ ╔═╗ ╦═╗ ╔╦╗ R
+║   ║ ║║║ ╠╩╗  ╚═╗ ║║║ ╠═╣ ╠╦╝  ║
+╩═╝ ╩ ╝╚╝ ╩ ╩  ╚═╝ ╩ ╩ ╩ ╩ ╩╚═  ╩
+`

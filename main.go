@@ -13,11 +13,11 @@ import (
 	"github.com/oleksandr/bonjour"
 )
 
-var (
-	confPath = flag.String("conf", "conf/device-gateway.json", "Device gateway configuration file path")
-)
+var confPath = flag.String("conf", "conf/device-gateway.json", "Device gateway configuration file path")
 
 func main() {
+	fmt.Print(LINKSMART)
+	logger.Printf("Starting Device Gateway")
 	flag.Parse()
 
 	if *confPath == "" {
