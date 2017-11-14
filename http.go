@@ -219,43 +219,44 @@ func (api *RESTfulAPI) createResourcePutHandler(resourceId string) http.HandlerF
 	return func(rw http.ResponseWriter, req *http.Request) {
 		logger.Printf("RESTfulAPI.createResourcePutHandler() %s %s", req.Method, req.RequestURI)
 
-		// Resolve mediaType
-		v := req.Header.Get("Content-Type")
-		mediaType, _, err := mime.ParseMediaType(v)
-		if err != nil {
-			api.respondWithBadRequest(rw, err.Error())
-			return
-		}
-
-		// Check if mediaType is supported by resource
-		isSupported := false
-		resource, found := api.config.FindResource(resourceId)
-		if !found {
-			api.respondWithNotFound(rw, "Resource does not exist")
-			return
-		}
-		for _, p := range resource.Protocols {
-			if p.Type == ProtocolTypeREST {
-				for _, ct := range p.ContentTypes {
-					ct := strings.ToLower(ct)
-					if ct == mediaType {
-						isSupported = true
-					}
-				}
-			}
-		}
-		if !isSupported {
-			api.respondWithUnsupportedMediaType(rw,
-				fmt.Sprintf("`%s` media type is not supported by this resource", mediaType))
-			return
-		}
-
 		// Extract PUT's body
 		body, err := ioutil.ReadAll(req.Body)
 		req.Body.Close()
 		if err != nil {
 			api.respondWithBadRequest(rw, err.Error())
 			return
+		}
+
+		if len(body) > 0 {
+			// Resolve mediaType
+			mediaType, _, err := mime.ParseMediaType(req.Header.Get("Content-Type"))
+			if err != nil {
+				api.respondWithBadRequest(rw, err.Error())
+				return
+			}
+
+			// Check if mediaType is supported by resource
+			isSupported := false
+			resource, found := api.config.FindResource(resourceId)
+			if !found {
+				api.respondWithNotFound(rw, "Resource does not exist")
+				return
+			}
+			for _, p := range resource.Protocols {
+				if p.Type == ProtocolTypeREST {
+					for _, ct := range p.ContentTypes {
+						ct := strings.ToLower(ct)
+						if ct == mediaType {
+							isSupported = true
+						}
+					}
+				}
+			}
+			if !isSupported {
+				api.respondWithUnsupportedMediaType(rw,
+					fmt.Sprintf("`%s` media type is not supported by this resource", mediaType))
+				return
+			}
 		}
 
 		// Submit data request
