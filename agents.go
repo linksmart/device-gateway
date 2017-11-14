@@ -93,7 +93,7 @@ func (am *AgentManager) start() {
 			case ExecTypeTimer:
 				am.createTimer(rid, r.Agent)
 			case ExecTypeTask:
-				am.validateTask(rid, r.Agent)
+				am.createTask(rid, r.Agent)
 			case ExecTypeService:
 				am.createService(rid, r.Agent)
 			default:
@@ -291,20 +291,13 @@ func (am *AgentManager) createTimer(resourceId string, agent Agent) {
 	logger.Printf("AgentManager.createTimer() %s", resourceId)
 }
 
-//
-// Validates a given agent by executing it once and put result into the cache
-//
-func (am *AgentManager) validateTask(resourceId string, agent Agent) {
+func (am *AgentManager) createTask(resourceId string, agent Agent) {
 	if agent.Type != ExecTypeTask {
 		logger.Printf("AgentManager.validateTask() ERROR: %s is not %s but %s", resourceId, ExecTypeTask, agent.Type)
 		return
 	}
 
-	go func() {
-		am.agentInbox <- am.executeTask(resourceId, agent, nil)
-	}()
-
-	logger.Printf("AgentManager.validateTask() %s", resourceId)
+	logger.Printf("AgentManager.createTask() %s", resourceId)
 }
 
 func (am *AgentManager) createService(resourceId string, agent Agent) {
