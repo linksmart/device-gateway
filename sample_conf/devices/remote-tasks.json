@@ -1,0 +1,48 @@
+{
+  "name": "command",
+  "description": "Executes commands locally",
+  "meta": {},
+  "ttl": 0,
+  "resources": [
+    {
+      "type": "Resource",
+      "name": "logs",
+      "agent": {
+        "type": "task",
+        "dir": null,
+        "exec": "tail -1000 ~/logs/device-gateway.log"
+      },
+      "representation": {},
+      "protocols": [
+        {
+          "type": "REST",
+          "methods": [
+            "GET"
+          ],
+          "content-types": [
+            "text/plain"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Resource",
+      "name": "reboot",
+      "agent": {
+        "type": "task",
+        "dir": null,
+        "exec": "sudo reboot"
+      },
+      "representation": {},
+      "protocols": [
+        {
+          "type": "REST",
+          "methods": [
+            "PUT"
+          ],
+          "content-types": []
+        }
+      ]
+    }
+  ]
+}
