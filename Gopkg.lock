@@ -5,7 +5,7 @@
   branch = "master"
   name = "code.linksmart.eu/com/go-sec"
   packages = ["auth/keycloak/obtainer","auth/keycloak/validator","auth/obtainer","auth/validator","authz"]
-  revision = "5abeee54723444678d878c5bb556e5c4218f69ce"
+  revision = "6e8d0334a281ca5740559365469c2f587c75cbcd"
 
 [[projects]]
   branch = "master"
@@ -106,6 +106,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "6e0cf43a9042681970e9413666697746cac807de22bf9483434484df8d58e94a"
+  inputs-digest = "c41e5824a29226223f6faed735d1048c7d02ad21526e4388a6d7c7d6d1fb1478"
   solver-name = "gps-cdcl"
   solver-version = 1
