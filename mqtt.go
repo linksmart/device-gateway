@@ -125,7 +125,10 @@ func (c *MQTTConnector) publisher() {
 			continue
 		}
 		topic := c.pubTopics[resp.ResourceId]
-		c.client.Publish(topic, byte(MQTTDefaultQoS), false, resp.Payload)
+		if token := c.client.Publish(topic, byte(MQTTDefaultQoS), false, resp.Payload); token.Wait() && token.Error() != nil {
+			logger.Printf("MQTTConnector.publisher() error publishing: %s", token.Error())
+			continue
+        }
 		logger.Println("MQTTConnector.publisher() published to", topic)
 	}
 }
