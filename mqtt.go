@@ -127,6 +127,7 @@ func (c *MQTTConnector) publisher() {
 		topic := c.pubTopics[resp.ResourceId]
 		if token := c.client.Publish(topic, byte(MQTTDefaultQoS), false, resp.Payload); token.Wait() && token.Error() != nil {
 			logger.Printf("MQTTConnector.publisher() error publishing: %s", token.Error())
+			// Note: this payload will be lost
 			continue
 		}
 		logger.Println("MQTTConnector.publisher() published to", topic)
@@ -248,7 +249,9 @@ func (c *MQTTConnector) onConnected(client paho.Client) {
 	}
 
 	// publish buffered messages to the broker
-	for resp := range c.offlineBufferCh {
+	for len(c.offlineBufferCh) > 0 {
+		resp := <-c.offlineBufferCh
+
 		if resp.IsError {
 			logger.Println("MQTTConnector.onConnected() data ERROR from agent manager:", string(resp.Payload))
 			continue
@@ -257,14 +260,11 @@ func (c *MQTTConnector) onConnected(client paho.Client) {
 
 		if token := c.client.Publish(topic, byte(MQTTDefaultQoS), false, resp.Payload); token.Wait() && token.Error() != nil {
 			logger.Printf("MQTTConnector.onConnected() error publishing: %s", token.Error())
+			// Note: this payload will be lost
 			continue
 		}
 		logger.Printf("MQTTConnector.onConnected() published buffered message to %s (%d/%d)", topic, len(c.offlineBufferCh)+1, c.config.OfflineBuffer)
-		if len(c.offlineBufferCh) == 0 {
-			break
-		}
 	}
-
 }
 
 func (c *MQTTConnector) onConnectionLost(client paho.Client, reason error) {
