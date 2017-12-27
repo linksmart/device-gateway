@@ -16,7 +16,7 @@ func init() {
 		DebugPrefix: "[dgw-debug] ",
 	})
 
-	if os.Getenv("PAHO-DEBUG") == "1" {
+	if os.Getenv("PAHO_DEBUG") == "1" {
 		w := elog.NewWriter(os.Stdout)
 		paho.ERROR = log.New(w, "[paho-error] ", 0)
 		paho.CRITICAL = log.New(w, "[paho-crit] ", 0)
