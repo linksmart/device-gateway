@@ -12,15 +12,15 @@ import (
 
 	"code.linksmart.eu/sc/service-catalog/discovery"
 	"code.linksmart.eu/sc/service-catalog/service"
-	MQTT "github.com/eclipse/paho.mqtt.golang"
+	paho "github.com/eclipse/paho.mqtt.golang"
 	"github.com/satori/go.uuid"
 )
 
-// MQTTConnector provides MQTT protocol connectivity
+// MQTTConnector provides paho protocol connectivity
 type MQTTConnector struct {
 	config          *MqttProtocol
 	clientID        string
-	client          MQTT.Client
+	client          paho.Client
 	pubCh           chan AgentResponse
 	offlineBufferCh chan AgentResponse
 	subCh           chan<- DataRequest
@@ -29,13 +29,13 @@ type MQTTConnector struct {
 }
 
 func newMQTTConnector(conf *Config, dataReqCh chan<- DataRequest) *MQTTConnector {
-	// Check if we need to publish to MQTT
+	// Check if we need to publish to paho
 	config, ok := conf.Protocols[ProtocolTypeMQTT].(MqttProtocol)
 	if !ok {
 		return nil
 	}
 
-	// check whether MQTT is required at all and set pub/sub topics for each resource
+	// check whether paho is required at all and set pub/sub topics for each resource
 	pubTopics := make(map[string]string)
 	subTopicsRvsd := make(map[string]string)
 	requiresMqtt := false
@@ -128,13 +128,13 @@ func (c *MQTTConnector) publisher() {
 		if token := c.client.Publish(topic, byte(MQTTDefaultQoS), false, resp.Payload); token.Wait() && token.Error() != nil {
 			logger.Printf("MQTTConnector.publisher() error publishing: %s", token.Error())
 			continue
-        }
+		}
 		logger.Println("MQTTConnector.publisher() published to", topic)
 	}
 }
 
 // processes incoming messages from the broker and writes DataRequets to the subCh
-func (c *MQTTConnector) messageHandler(client MQTT.Client, msg MQTT.Message) {
+func (c *MQTTConnector) messageHandler(client paho.Client, msg paho.Message) {
 	logger.Printf("MQTTConnector.messageHandler() message received: topic: %v payload: %v\n", msg.Topic(), msg.Payload())
 
 	rid, ok := c.subTopicsRvsd[msg.Topic()]
@@ -230,10 +230,10 @@ func (c *MQTTConnector) connect(backOff int) {
 	}
 }
 
-func (c *MQTTConnector) onConnected(client MQTT.Client) {
+func (c *MQTTConnector) onConnected(client paho.Client) {
 	logger.Printf("MQTTPulbisher.onConnected() connected to the broker %v", c.config.URL)
 
-	// subscribe if there is at least one resource with SUB in MQTT protocol is configured
+	// subscribe if there is at least one resource with SUB in paho protocol is configured
 	if len(c.subTopicsRvsd) > 0 {
 		logger.Println("MQTTPulbisher.onConnected() will (re-)subscribe to all configured SUB topics")
 
@@ -254,7 +254,11 @@ func (c *MQTTConnector) onConnected(client MQTT.Client) {
 			continue
 		}
 		topic := c.pubTopics[resp.ResourceId]
-		c.client.Publish(topic, byte(MQTTDefaultQoS), false, resp.Payload)
+
+		if token := c.client.Publish(topic, byte(MQTTDefaultQoS), false, resp.Payload); token.Wait() && token.Error() != nil {
+			logger.Printf("MQTTConnector.onConnected() error publishing: %s", token.Error())
+			continue
+		}
 		logger.Printf("MQTTConnector.onConnected() published buffered message to %s (%d/%d)", topic, len(c.offlineBufferCh)+1, c.config.OfflineBuffer)
 		if len(c.offlineBufferCh) == 0 {
 			break
@@ -263,7 +267,7 @@ func (c *MQTTConnector) onConnected(client MQTT.Client) {
 
 }
 
-func (c *MQTTConnector) onConnectionLost(client MQTT.Client, reason error) {
+func (c *MQTTConnector) onConnectionLost(client paho.Client, reason error) {
 	logger.Println("MQTTPulbisher.onConnectionLost() lost connection to the broker: ", reason.Error())
 
 	// Initialize a new client and re-connect
@@ -272,7 +276,7 @@ func (c *MQTTConnector) onConnectionLost(client MQTT.Client, reason error) {
 }
 
 func (c *MQTTConnector) configureMqttConnection() {
-	connOpts := MQTT.NewClientOptions().
+	connOpts := paho.NewClientOptions().
 		AddBroker(c.config.URL).
 		SetClientID(c.clientID).
 		SetCleanSession(true).
@@ -316,5 +320,5 @@ func (c *MQTTConnector) configureMqttConnection() {
 		connOpts.SetTLSConfig(tlsConfig)
 	}
 
-	c.client = MQTT.NewClient(connOpts)
+	c.client = paho.NewClient(connOpts)
 }
