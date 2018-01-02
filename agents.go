@@ -282,7 +282,7 @@ func (am *AgentManager) createTimer(resourceId string, agent Agent) {
 	}
 	ticker := time.NewTicker(agent.Interval * time.Second)
 	go func(rid string, a Agent) {
-		for _ = range ticker.C {
+		for ; true; <-ticker.C {
 			am.agentInbox <- am.executeTask(rid, a, nil)
 		}
 	}(resourceId, agent)
