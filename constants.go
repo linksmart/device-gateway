@@ -20,6 +20,7 @@ const (
 	// MQTT
 	MQTTDefaultQoS           = 1
 	MQTTMaxReconnectInterval = 60
+	MQTTWaitTimeout          = 10 * time.Second
 )
 
 const LINKSMART = `

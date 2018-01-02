@@ -125,9 +125,13 @@ func (c *MQTTConnector) publisher() {
 			continue
 		}
 		topic := c.pubTopics[resp.ResourceId]
-		if token := c.client.Publish(topic, byte(MQTTDefaultQoS), false, resp.Payload); token.Wait() && token.Error() != nil {
+
+		token := c.client.Publish(topic, byte(MQTTDefaultQoS), false, resp.Payload)
+		if published := token.WaitTimeout(MQTTWaitTimeout); token.Error() != nil {
 			logger.Printf("MQTTConnector.publisher() error publishing: %s", token.Error())
-			// Note: this payload will be lost
+			continue // Note: this payload will be lost
+		} else if !published {
+			logger.Println("MQTTConnector.publisher() publish timeout. Message may be lost.")
 			continue
 		}
 		logger.Println("MQTTConnector.publisher() published to", topic)
@@ -258,9 +262,12 @@ func (c *MQTTConnector) onConnected(client paho.Client) {
 		}
 		topic := c.pubTopics[resp.ResourceId]
 
-		if token := c.client.Publish(topic, byte(MQTTDefaultQoS), false, resp.Payload); token.Wait() && token.Error() != nil {
+		token := c.client.Publish(topic, byte(MQTTDefaultQoS), false, resp.Payload)
+		if published := token.WaitTimeout(MQTTWaitTimeout); token.Error() != nil {
 			logger.Printf("MQTTConnector.onConnected() error publishing: %s", token.Error())
-			// Note: this payload will be lost
+			continue // Note: this payload will be lost
+		} else if !published {
+			logger.Println("MQTTConnector.onConnected() publish timeout. Message may be lost.")
 			continue
 		}
 		logger.Printf("MQTTConnector.onConnected() published buffered message to %s (%d/%d)", topic, len(c.offlineBufferCh)+1, c.config.OfflineBuffer)
