@@ -107,6 +107,7 @@ func (c *MQTTConnector) start() {
 // reads outgoing messages from the pubCh und publishes them to the broker
 func (c *MQTTConnector) publisher() {
 	for resp := range c.pubCh {
+		logger.Debugln("MQTTConnector.publisher() got message:", string(resp.Payload))
 		if !c.client.IsConnected() {
 			if c.config.OfflineBuffer == 0 {
 				logger.Println("MQTTConnector.publisher() got data while not connected to the broker. **discarded**")
@@ -127,7 +128,7 @@ func (c *MQTTConnector) publisher() {
 		topic := c.pubTopics[resp.ResourceId]
 
 		token := c.client.Publish(topic, byte(MQTTDefaultQoS), false, resp.Payload)
-		if published := token.WaitTimeout(MQTTWaitTimeout); token.Error() != nil {
+		if published := token.WaitTimeout(MQTTWaitTimeout); published && token.Error() != nil {
 			logger.Printf("MQTTConnector.publisher() error publishing: %s", token.Error())
 			continue // Note: this payload will be lost
 		} else if !published {
