@@ -2,13 +2,11 @@
 
 package main
 
-import (
-	"time"
-)
+import "time"
 
 const (
 	// Use to invalidate cache during the requests for agent's data
-	AgentResponseCacheTTL time.Duration = time.Duration(3) * time.Second
+	AgentResponseCacheTTL = 3 * time.Second
 
 	// DNS-SD service name (type)
 	DNSSDServiceTypeDGW  = "_linksmart-dgw._tcp"
@@ -20,7 +18,7 @@ const (
 	// MQTT
 	MQTTDefaultQoS           = 1
 	MQTTMaxReconnectInterval = 60
-	MQTTWaitTimeout          = 10 * time.Second
+	MQTTPublishTimeoutEnvKey = "DGW_PUBLISH_TIMEOUT"
 )
 
 const LINKSMART = `
