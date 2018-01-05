@@ -15,10 +15,12 @@ import (
 
 var confPath = flag.String("conf", "conf/device-gateway.json", "Device gateway configuration file path")
 var BuildNumber = "N/A"
+var Version = "N/A"
 
 func main() {
 	fmt.Print(LINKSMART)
 	logger.Printf("Starting Device Gateway")
+	logger.Printf("Version: %s", Version)
 	logger.Printf("Build Number: %s", BuildNumber)
 	flag.Parse()
 
