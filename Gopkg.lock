@@ -38,10 +38,10 @@
   version = "v3.0.0"
 
 [[projects]]
+  branch = "master"
   name = "github.com/eclipse/paho.mqtt.golang"
   packages = [".","packets"]
-  revision = "aff15770515e3c57fc6109da73d42b0d46f7f483"
-  version = "v1.1.0"
+  revision = "cd4337d9ef8b177236ef7abc7bc2677385c11381"
 
 [[projects]]
   branch = "master"
@@ -106,6 +106,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "c41e5824a29226223f6faed735d1048c7d02ad21526e4388a6d7c7d6d1fb1478"
+  inputs-digest = "8c8fea95c1d01f5a2b3585d05fcf57f6ab8db350ae9dc89d143441b0dddce7eb"
   solver-name = "gps-cdcl"
   solver-version = 1
