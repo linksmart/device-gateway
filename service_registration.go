@@ -22,21 +22,24 @@ func registerInServiceCatalog(conf *Config) (func() error, error) {
 		serviceID = uuid.NewV4().String()
 	}
 
-	var RESTEndpoint string
+	var RESTEndpoint, MQTTEndpoint string
 	if conf.Protocols[ProtocolTypeREST] != nil {
 		RESTEndpoint = conf.PublicEndpoint + conf.Protocols[ProtocolTypeREST].(RestProtocol).Location
+	}
+	if conf.Protocols[ProtocolTypeMQTT] != nil {
+		MQTTEndpoint = conf.Protocols[ProtocolTypeMQTT].(MqttProtocol).URL
 	}
 
 	service := catalog.Service{
 		ID:          serviceID,
 		Name:        "_linksmart-dgw._tcp",
 		Description: conf.Description,
-		APIs:        map[string]string{"REST API": RESTEndpoint},
+		APIs:        map[string]string{"HTTP": RESTEndpoint, "MQTT": MQTTEndpoint},
 		Docs: []catalog.Doc{{
 			Description: "Documentation",
-			APIs:        []string{"REST API"},
-			URL:         "http://doc.linksmart.eu/DGW",
-			Type:        "text/html",
+			//APIs:        []string{"HTTP", "MQTT"},
+			URL:  "http://doc.linksmart.eu/DGW",
+			Type: "text/html",
 		}},
 		Meta: map[string]interface{}{
 			"ls_codename": "DGW",
