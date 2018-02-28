@@ -110,6 +110,7 @@ type Config struct {
 	Protocols      map[ProtocolType]interface{} `json:"protocols"`
 	Devices        []Device                     `json:"devices"`
 	Auth           ValidatorConf                `json:"auth"`
+	ServiceCatalog ServiceCatalogConf           `json:"serviceCatalog"`
 }
 
 // Validates the loaded configuration
@@ -340,6 +341,14 @@ const (
 	// Constantly running and emitting output
 	ExecTypeService ExecType = "service"
 )
+
+// Service Catalogs Registration Config
+type ServiceCatalogConf struct {
+	Discover bool          `json:"discover"`
+	Endpoint string        `json:"endpoint"`
+	TTL      uint          `json:"ttl"`
+	Auth     *ObtainerConf `json:"auth"`
+}
 
 // Ticket Validator Config
 type ValidatorConf struct {

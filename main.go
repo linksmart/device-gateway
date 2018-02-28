@@ -63,6 +63,13 @@ func main() {
 	// register in remote catalogs
 	regChannels, wg := registerInRemoteCatalog(devices, config)
 
+	// Register in Service Catalog
+	unregisterService, err := registerInServiceCatalog(config)
+	if err != nil {
+		logger.Println(err.Error())
+		os.Exit(1)
+	}
+
 	// Register this gateway as a service via DNS-SD
 	var bonjourS *bonjour.Server
 	if config.DnssdEnabled {
@@ -114,6 +121,10 @@ func main() {
 		default:
 		}
 	}
+
+	// Unregister from Service Catalog
+	unregisterService()
+
 	wg.Wait()
 
 	logger.Println("Stopped")

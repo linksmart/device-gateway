@@ -16,8 +16,8 @@
 [[projects]]
   branch = "master"
   name = "code.linksmart.eu/sc/service-catalog"
-  packages = ["discovery","service","utils"]
-  revision = "3b17571715d89b57e486747fb3b6ae28edef9a5d"
+  packages = ["catalog","client","discovery","utils"]
+  revision = "998bee50b2ee89f3ec511e4fbe4b8de9a6057c76"
 
 [[projects]]
   branch = "master"
@@ -86,6 +86,12 @@
   revision = "5dcf00d8b228be86307f952f550f2191d956b9e2"
 
 [[projects]]
+  name = "github.com/pborman/uuid"
+  packages = ["."]
+  revision = "e790cca94e6cc75c7064b1332e63811d4aae1a53"
+  version = "v1.1"
+
+[[projects]]
   name = "github.com/satori/go.uuid"
   packages = ["."]
   revision = "879c5887cd475cd7864858769793b2ceb0d44feb"
@@ -106,6 +112,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "8c8fea95c1d01f5a2b3585d05fcf57f6ab8db350ae9dc89d143441b0dddce7eb"
+  inputs-digest = "e6a8f6dd995fccc4570f8e8a50bdd81b84e1d2a612ffb236c56cae7fb33829a5"
   solver-name = "gps-cdcl"
   solver-version = 1

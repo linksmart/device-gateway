@@ -10,22 +10,24 @@ import (
 	"strings"
 	"time"
 
+	"code.linksmart.eu/sc/service-catalog/catalog"
+	"code.linksmart.eu/sc/service-catalog/client"
 	"code.linksmart.eu/sc/service-catalog/discovery"
-	"code.linksmart.eu/sc/service-catalog/service"
 	paho "github.com/eclipse/paho.mqtt.golang"
 	"github.com/satori/go.uuid"
 )
 
 // MQTTConnector provides paho protocol connectivity
 type MQTTConnector struct {
-	config          *MqttProtocol
-	clientID        string
-	client          paho.Client
-	pubCh           chan AgentResponse
-	offlineBufferCh chan AgentResponse
-	subCh           chan<- DataRequest
-	pubTopics       map[string]string
-	subTopicsRvsd   map[string]string // store SUB topics "reversed" to optimize lookup in messageHandler
+	config                 *MqttProtocol
+	clientID               string
+	client                 paho.Client
+	pubCh                  chan AgentResponse
+	offlineBufferCh        chan AgentResponse
+	subCh                  chan<- DataRequest
+	pubTopics              map[string]string
+	subTopicsRvsd          map[string]string // store SUB topics "reversed" to optimize lookup in messageHandler
+	serviceCatalogEndpoint string
 }
 
 var WaitTimeout time.Duration = 0 // overriden by environment variable
@@ -68,13 +70,14 @@ func newMQTTConnector(conf *Config, dataReqCh chan<- DataRequest) *MQTTConnector
 
 	// Create and return connector
 	connector := &MQTTConnector{
-		config:          &config,
-		clientID:        fmt.Sprintf("%v-%v", conf.Id, uuid.NewV1()),
-		pubCh:           make(chan AgentResponse, 100), // buffer to compensate for pub latencies
-		offlineBufferCh: make(chan AgentResponse, config.OfflineBuffer),
-		subCh:           dataReqCh,
-		pubTopics:       pubTopics,
-		subTopicsRvsd:   subTopicsRvsd,
+		config:                 &config,
+		clientID:               fmt.Sprintf("%v-%v", conf.Id, uuid.NewV1()),
+		pubCh:                  make(chan AgentResponse, 100), // buffer to compensate for pub latencies
+		offlineBufferCh:        make(chan AgentResponse, config.OfflineBuffer),
+		subCh:                  dataReqCh,
+		pubTopics:              pubTopics,
+		subTopicsRvsd:          subTopicsRvsd,
+		serviceCatalogEndpoint: conf.ServiceCatalog.Endpoint,
 	}
 
 	return connector
@@ -88,6 +91,7 @@ func (c *MQTTConnector) start() {
 	logger.Println("MQTTConnector.start()")
 
 	if c.config.Discover && c.config.URL == "" {
+		logger.Println("Discovering broker endpoint...")
 		err := c.discoverBrokerEndpoint()
 		if err != nil {
 			logger.Println("MQTTConnector.start() failed to start publisher:", err.Error())
@@ -166,37 +170,44 @@ func (c *MQTTConnector) messageHandler(client paho.Client, msg paho.Message) {
 }
 
 func (c *MQTTConnector) discoverBrokerEndpoint() error {
-	endpoint, err := discovery.DiscoverCatalogEndpoint(service.DNSSDServiceType)
+	if c.serviceCatalogEndpoint == "" {
+		var err error
+		c.serviceCatalogEndpoint, err = discovery.DiscoverCatalogEndpoint(catalog.DNSSDServiceType)
+		if err != nil {
+			return err
+		}
+	}
+
+	scc, err := client.NewHTTPClient(c.serviceCatalogEndpoint, nil)
 	if err != nil {
 		return err
 	}
 
-	rcc, err := service.NewRemoteCatalogClient(endpoint, nil)
-	if err != nil {
-		return err
-	}
-	res, _, err := rcc.Filter("meta.serviceType", "equals", DNSSDServiceTypeMQTT, 1, 50)
-	if err != nil {
-		return err
-	}
-	supportsPub := false
-	for _, s := range res {
-		for _, proto := range s.Protocols {
-			for _, m := range proto.Methods {
-				if m == "PUB" {
-					supportsPub = true
-					break
-				}
-			}
-			if !supportsPub {
-				continue
-			}
-			if ProtocolType(proto.Type) == ProtocolTypeMQTT {
-				c.config.URL = proto.Endpoint["url"].(string)
-				break
-			}
+	const (
+		mainBroker = "main_broker"
+		mqttKey    = "MQTT"
+	)
+
+	var uri string
+	service, err := scc.Get(mainBroker)
+	if err == nil {
+		uri = service.APIs[mqttKey]
+	} else {
+		// Find another broker, take first match
+		res, _, err := scc.GetMany(1, 100, &client.FilterArgs{"name", "equals", DNSSDServiceTypeMQTT})
+		if err != nil {
+			return err
 		}
+		if len(res) == 0 {
+			return fmt.Errorf("cound not discover any broker")
+		}
+		uri = res[0].APIs[mqttKey]
 	}
+	logger.Printf("Discovered broker endpoint: %s", uri)
+
+	uri = strings.Replace(uri, "mqtt://", "tcp://", 1)
+	uri = strings.Replace(uri, "mqtts://", "ssl://", 1)
+	c.config.URL = uri
 
 	err = c.config.Validate()
 	if err != nil {

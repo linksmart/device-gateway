@@ -1,14 +1,9 @@
 {
-  "id": "demo-dgw",
-  "description": "Example Gateway",
+  "id": "example-dgw",
+  "description": "Example LinkSmart® Device Gateway",
   "publicEndpoint": "http://fqdn-of-the-host:8080",
   "staticDir": "./static",
-  "catalog": [
-    {
-      "discover": false,
-      "endpoint": "http://remotehost:8081/rc"
-    }
-  ],
+  "catalog": [],
   "http": {
     "bindAddr": "0.0.0.0",
     "bindPort": 8080
@@ -18,8 +13,14 @@
       "location": "/rest"
     },
     "MQTT": {
-      "url": "tcp://127.0.0.1:1883",
-      "prefix": "/demo-dgw"
+      "discover": false,
+      "url": "tcp://localhost:1883",
+      "prefix": "example-dgw",
+      "offlineBuffer": 100
     }
+  },
+  "serviceCatalog": {
+    "endpoint": "http://localhost:8082",
+    "ttl": 120
   }
 }
