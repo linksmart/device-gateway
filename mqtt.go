@@ -94,7 +94,7 @@ func (c *MQTTConnector) start() {
 		logger.Println("Discovering broker endpoint...")
 		err := c.discoverBrokerEndpoint()
 		if err != nil {
-			logger.Println("MQTTConnector.start() failed to start publisher:", err.Error())
+			logger.Println("MQTTConnector.start() failed to discover broker endpoint:", err.Error())
 			return
 		}
 	}
