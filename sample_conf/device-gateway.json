@@ -14,6 +14,7 @@
     },
     "MQTT": {
       "discover": false,
+      "discoverID": "main_broker",
       "url": "tcp://localhost:1883",
       "prefix": "example-dgw",
       "offlineBuffer": 100

@@ -235,6 +235,7 @@ func (p *RestProtocol) Validate() error {
 
 type MqttProtocol struct {
 	Discover      bool   `json:"discover"`
+	DiscoverID    string `json:"discoverID"`
 	URL           string `json:"url"`
 	Prefix        string `json:"prefix"`
 	Username      string `json:"username"`

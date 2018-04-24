@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"code.linksmart.eu/sc/service-catalog/catalog"
-	"code.linksmart.eu/sc/service-catalog/client"
+	sc "code.linksmart.eu/sc/service-catalog/catalog"
+	scClient "code.linksmart.eu/sc/service-catalog/client"
 	"code.linksmart.eu/sc/service-catalog/discovery"
 	paho "github.com/eclipse/paho.mqtt.golang"
 	"github.com/satori/go.uuid"
@@ -90,13 +90,8 @@ func (c *MQTTConnector) dataInbox() chan<- AgentResponse {
 func (c *MQTTConnector) start() {
 	logger.Println("MQTTConnector.start()")
 
-	if c.config.Discover && c.config.URL == "" {
-		logger.Println("Discovering broker endpoint...")
-		err := c.discoverBrokerEndpoint()
-		if err != nil {
-			logger.Println("MQTTConnector.start() failed to discover broker endpoint:", err.Error())
-			return
-		}
+	if c.config.Discover {
+		c.discoverBrokerEndpoint()
 	}
 
 	// configure the mqtt client
@@ -153,7 +148,7 @@ func (c *MQTTConnector) messageHandler(client paho.Client, msg paho.Message) {
 
 	rid, ok := c.subTopicsRvsd[msg.Topic()]
 	if !ok {
-		logger.Println("The received message doesn't match any resource's configuration **discarded**")
+		logger.Println("MQTTConnector.messageHandler() the received message doesn't match any resource's configuration **discarded**")
 		return
 	}
 
@@ -169,51 +164,86 @@ func (c *MQTTConnector) messageHandler(client paho.Client, msg paho.Message) {
 	// no response - blocking on waiting for one
 }
 
-func (c *MQTTConnector) discoverBrokerEndpoint() error {
-	if c.serviceCatalogEndpoint == "" {
-		var err error
-		c.serviceCatalogEndpoint, err = discovery.DiscoverCatalogEndpoint(catalog.DNSSDServiceType)
-		if err != nil {
-			return err
+func (c *MQTTConnector) discoverBrokerEndpoint() {
+	logger.Println("MQTTConnector.discoverBrokerEndpoint() discovering broker endpoint...")
+
+	backOffTime := 10 * time.Second
+	backOff := func() {
+		logger.Printf("MQTTConnector.discoverBrokerEndpoint() will retry in %v", backOffTime)
+		time.Sleep(backOffTime)
+		if backOffTime <= MQTTMaxRediscoverInterval {
+			backOffTime *= 2
+			if backOffTime > MQTTMaxRediscoverInterval {
+				backOffTime = MQTTMaxRediscoverInterval
+			}
 		}
 	}
 
-	scc, err := client.NewHTTPClient(c.serviceCatalogEndpoint, nil)
-	if err != nil {
-		return err
-	}
+	var uri, id string
+	for {
+		if c.serviceCatalogEndpoint == "" {
+			logger.Println("MQTTConnector.discoverBrokerEndpoint() discovering Service Catalog endpoint...")
+			var err error
+			c.serviceCatalogEndpoint, err = discovery.DiscoverCatalogEndpoint(sc.DNSSDServiceType)
+			if err != nil {
+				logger.Printf("MQTTConnector.discoverBrokerEndpoint() unable to discover Service Catalog: %s", err)
+				backOff()
+				continue
+			}
+		}
 
-	const (
-		mainBroker = "main_broker"
-		mqttKey    = "MQTT"
-	)
-
-	var uri string
-	service, err := scc.Get(mainBroker)
-	if err == nil {
-		uri = service.APIs[mqttKey]
-	} else {
-		// Find another broker, take first match
-		res, _, err := scc.GetMany(1, 100, &client.FilterArgs{"name", "equals", DNSSDServiceTypeMQTT})
+		scc, err := scClient.NewHTTPClient(c.serviceCatalogEndpoint, nil)
 		if err != nil {
-			return err
+			logger.Printf("MQTTConnector.discoverBrokerEndpoint() error creating Service Catalog client! Stopping discovery.")
+			return
+		}
+
+		// find the specified broker
+		if c.config.DiscoverID != "" {
+			service, err := scc.Get(c.config.DiscoverID)
+			if err != nil {
+				switch err.(type) {
+				case *sc.NotFoundError:
+					logger.Printf("MQTTConnector.discoverBrokerEndpoint() could not find broker: %s", c.config.DiscoverID)
+				default:
+					logger.Printf("MQTTConnector.discoverBrokerEndpoint() error searching for %s in Service Catalog: %s", c.config.DiscoverID, err)
+				}
+				backOff()
+				continue
+			}
+			uri, id = service.APIs[sc.APITypeMQTT], service.ID
+			break
+		}
+
+		// find another broker, take first match
+		res, _, err := scc.GetMany(1, 100, &scClient.FilterArgs{"name", "equals", DNSSDServiceTypeMQTT})
+		if err != nil {
+			logger.Printf("MQTTConnector.discoverBrokerEndpoint() error searching for broker in Service Catalog: %s", err)
+			backOff()
+			continue
 		}
 		if len(res) == 0 {
-			return fmt.Errorf("cound not discover any broker")
+			logger.Printf("MQTTConnector.discoverBrokerEndpoint() no brokers could be discovered from Service Catalog.")
+			backOff()
+			continue
 		}
-		uri = res[0].APIs[mqttKey]
+		uri, id = res[0].APIs[sc.APITypeMQTT], res[0].ID
+		break
 	}
-	logger.Printf("Discovered broker endpoint: %s", uri)
 
+	// make the scheme compatible to Paho
 	uri = strings.Replace(uri, "mqtt://", "tcp://", 1)
 	uri = strings.Replace(uri, "mqtts://", "ssl://", 1)
 	c.config.URL = uri
 
-	err = c.config.Validate()
+	err := c.config.Validate()
 	if err != nil {
-		return err
+		logger.Printf("MQTTConnector.discoverBrokerEndpoint() error validating broker configuration: %s", err)
+		return
 	}
-	return nil
+
+	logger.Printf("MQTTConnector.discoverBrokerEndpoint() discovered broker %s with endpoint: %s", id, uri)
+	return
 }
 
 func (c *MQTTConnector) stop() {
@@ -223,14 +253,14 @@ func (c *MQTTConnector) stop() {
 	}
 }
 
-func (c *MQTTConnector) connect(backOff int) {
+func (c *MQTTConnector) connect(backOff time.Duration) {
 	if c.client == nil {
 		logger.Printf("MQTTConnector.connect() client is not configured")
 		return
 	}
 	for {
-		logger.Printf("MQTTConnector.connect() connecting to the broker %v, backOff: %v sec\n", c.config.URL, backOff)
-		time.Sleep(time.Duration(backOff) * time.Second)
+		logger.Printf("MQTTConnector.connect() connecting to the broker %v, backOff: %v\n", c.config.URL, backOff)
+		time.Sleep(backOff)
 		if c.client.IsConnected() {
 			break
 		}
@@ -241,7 +271,7 @@ func (c *MQTTConnector) connect(backOff int) {
 		}
 		logger.Printf("MQTTConnector.connect() failed to connect: %v\n", token.Error().Error())
 		if backOff == 0 {
-			backOff = 10
+			backOff = 10 * time.Second
 		} else if backOff <= MQTTMaxReconnectInterval {
 			backOff *= 2
 			if backOff > MQTTMaxReconnectInterval {

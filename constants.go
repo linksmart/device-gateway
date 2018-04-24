@@ -17,7 +17,8 @@ const (
 
 	// MQTT
 	MQTTDefaultQoS           = 1
-	MQTTMaxReconnectInterval = 60
+	MQTTMaxReconnectInterval = 60*time.Second
+	MQTTMaxRediscoverInterval = 60*time.Second
 	MQTTPublishTimeoutEnvKey = "DGW_PUBLISH_TIMEOUT"
 )
 
