@@ -64,7 +64,7 @@ func main() {
 	regChannels, wg := registerInRemoteCatalog(devices, config)
 
 	// Register in Service Catalog
-	unregisterService, err := registerInServiceCatalog(config)
+	unregisterService, err := registerInServiceCatalog(config, mqttConnector.discoveryCh)
 	if err != nil {
 		logger.Println(err.Error())
 		os.Exit(1)

@@ -28,6 +28,7 @@ type MQTTConnector struct {
 	pubTopics              map[string]string
 	subTopicsRvsd          map[string]string // store SUB topics "reversed" to optimize lookup in messageHandler
 	serviceCatalogEndpoint string
+	discoveryCh            chan string
 }
 
 var WaitTimeout time.Duration = 0 // overriden by environment variable
@@ -78,6 +79,7 @@ func newMQTTConnector(conf *Config, dataReqCh chan<- DataRequest) *MQTTConnector
 		pubTopics:              pubTopics,
 		subTopicsRvsd:          subTopicsRvsd,
 		serviceCatalogEndpoint: conf.ServiceCatalog.Endpoint,
+		discoveryCh:            make(chan string),
 	}
 
 	return connector
@@ -243,6 +245,7 @@ func (c *MQTTConnector) discoverBrokerEndpoint() {
 	}
 
 	logger.Printf("MQTTConnector.discoverBrokerEndpoint() discovered broker %s with endpoint: %s", id, uri)
+	c.discoveryCh <- uri
 	return
 }
 
