@@ -14,7 +14,6 @@ import (
 	scClient "code.linksmart.eu/sc/service-catalog/client"
 	"code.linksmart.eu/sc/service-catalog/discovery"
 	paho "github.com/eclipse/paho.mqtt.golang"
-	"github.com/satori/go.uuid"
 )
 
 // MQTTConnector provides paho protocol connectivity
@@ -72,7 +71,7 @@ func newMQTTConnector(conf *Config, dataReqCh chan<- DataRequest) *MQTTConnector
 	// Create and return connector
 	connector := &MQTTConnector{
 		config:                 &config,
-		clientID:               fmt.Sprintf("%v-%v", conf.Id, uuid.NewV1()),
+		clientID:               fmt.Sprintf("DGW-%s", conf.Id),
 		pubCh:                  make(chan AgentResponse, 100), // buffer to compensate for pub latencies
 		offlineBufferCh:        make(chan AgentResponse, config.OfflineBuffer),
 		subCh:                  dataReqCh,

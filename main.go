@@ -5,6 +5,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/satori/go.uuid"
 	"os"
 	"os/signal"
 	"syscall"
@@ -33,6 +34,10 @@ func main() {
 	if err != nil {
 		logger.Printf("Failed to load configuration: %v\n", err)
 		os.Exit(1)
+	}
+	if config.Id == "" {
+		config.Id = uuid.NewV4().String()
+		logger.Printf("Generated random service ID: %s", config.Id)
 	}
 
 	// Agents' process manager

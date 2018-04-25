@@ -7,7 +7,6 @@ import (
 	"code.linksmart.eu/com/go-sec/auth/obtainer"
 	"code.linksmart.eu/sc/service-catalog/catalog"
 	"code.linksmart.eu/sc/service-catalog/client"
-	"github.com/satori/go.uuid"
 )
 
 // TODO: register via MQTT
@@ -15,11 +14,6 @@ import (
 func registerInServiceCatalog(conf *Config, apiDiscovery <-chan string) (func() error, error) {
 	if conf.ServiceCatalog.Endpoint == "" {
 		return func() error { return nil }, nil
-	}
-
-	serviceID := conf.Id
-	if conf.Id == "" {
-		serviceID = uuid.NewV4().String()
 	}
 
 	var RESTEndpoint, MQTTEndpoint string
@@ -31,7 +25,7 @@ func registerInServiceCatalog(conf *Config, apiDiscovery <-chan string) (func() 
 	}
 
 	service := catalog.Service{
-		ID:          serviceID,
+		ID:          conf.Id,
 		Name:        "_linksmart-dgw._tcp",
 		Description: conf.Description,
 		APIs:        map[string]string{catalog.APITypeHTTP: RESTEndpoint, catalog.APITypeMQTT: MQTTEndpoint},
