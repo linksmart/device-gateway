@@ -44,9 +44,11 @@ func main() {
 	agentManager := newAgentManager(config)
 
 	// Configure MQTT if required
+	discoveryCh := make(chan string)
 	mqttConnector := newMQTTConnector(config, agentManager.DataRequestInbox())
 	if mqttConnector != nil {
 		agentManager.setPublishingChannel(mqttConnector.dataInbox())
+		discoveryCh = mqttConnector.discoveryCh
 		go mqttConnector.start()
 	}
 
@@ -69,7 +71,7 @@ func main() {
 	regChannels, wg := registerInRemoteCatalog(devices, config)
 
 	// Register in Service Catalog
-	unregisterService, err := registerInServiceCatalog(config, mqttConnector.discoveryCh)
+	unregisterService, err := registerInServiceCatalog(config, discoveryCh)
 	if err != nil {
 		logger.Println(err.Error())
 		os.Exit(1)
