@@ -25,7 +25,7 @@ if [[ -n $text ]] ; then
 	if [[ $platform == 'linux' ]]; then
 	   echo "${text}" | espeak -s 120 2>/dev/null
 	elif [[ $platform == 'darwin' ]]; then
-	   /usr/bin/say -v Vicki $text
+	   /usr/bin/say -v Samantha $text
 	else
 		>&2 echo "Unsupported platform: ${platform}"
 		exit 1
