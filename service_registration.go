@@ -31,7 +31,7 @@ func registerInServiceCatalog(conf *Config, apiDiscovery <-chan string) (func() 
 		APIs:        map[string]string{catalog.APITypeHTTP: RESTEndpoint, catalog.APITypeMQTT: MQTTEndpoint},
 		Docs: []catalog.Doc{{
 			Description: "Documentation",
-			URL:         "http://doc.linksmart.eu/DGW",
+			URL:         "https://docs.linksmart.eu/display/DGW",
 			Type:        "text/html",
 		}},
 		Meta: map[string]interface{}{
