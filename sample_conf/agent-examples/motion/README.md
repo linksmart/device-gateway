@@ -40,7 +40,7 @@ Here's an example of a device configuration for the Device Gateway (DGW). You ne
           "agent": {
             "type": "service",
             "dir": null,
-            "exec": "python simple.py"
+            "exec": "python -u simple.py"
           },
           "representation": {
             "application/json": {
