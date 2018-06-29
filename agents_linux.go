@@ -16,7 +16,7 @@ import (
 // Executes a given agent code and sends the response to the agents inbox channel
 //
 func (am *AgentManager) executeTask(resourceId string, agent Agent, input []byte) AgentResponse {
-	command := []string{"/bin/bash", "-c", agent.Exec}
+	command := []string{"/bin/sh", "-c", agent.Exec}
 	cmd := exec.Command(command[0], command[1:]...)
 	if agent.Dir != "" {
 		cmd.Dir = agent.Dir
@@ -74,7 +74,7 @@ func (am *AgentManager) executeTask(resourceId string, agent Agent, input []byte
 // and sent the agents inbox channel
 //
 func (am *AgentManager) executeService(resourceId string, agent Agent) (*exec.Cmd, error) {
-	command := []string{"/bin/bash", "-c", agent.Exec}
+	command := []string{"/bin/sh", "-c", agent.Exec}
 	cmd := exec.Command(command[0], command[1:]...)
 	if agent.Dir != "" {
 		cmd.Dir = agent.Dir
