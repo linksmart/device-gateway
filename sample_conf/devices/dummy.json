@@ -1,6 +1,6 @@
 {
   "name": "DummyDevice",
-  "description": "Just a test of DGW",
+  "description": "Dummy device producing random numbers, published to the broker",
   "meta": {"any":"key", "kind":"dummy"},
   "ttl": 30,
   "resources": [
@@ -11,7 +11,7 @@
       "agent": {
         "type": "service",
         "dir": null,
-        "exec": "while true; do echo $RANDOM; sleep 3; done"
+        "exec": "while true; do echo $RANDOM; sleep 10; done"
       },
       "representation": {
         "text/plain": {
@@ -20,13 +20,14 @@
       },
       "protocols": [
         {
-          "type": "REST",
+          "type": "MQTT",
           "methods": [
-            "GET"
+            "PUB"
           ],
           "content-types": [
             "text/plain"
-          ]
+          ],
+          "pub_retained": false
         }
       ]
     }

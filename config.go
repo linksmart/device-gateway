@@ -319,6 +319,7 @@ type SupportedProtocol struct {
 	Methods      []string
 	ContentTypes []string `json:"content-types"`
 	PubTopic     string   `json:"pub_topic"`
+	PubRetained  bool     `json:"pub_retained"`
 	SubTopic     string   `json:"sub_topic"`
 }
 
