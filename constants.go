@@ -21,9 +21,3 @@ const (
 	MQTTMaxRediscoverInterval = 60*time.Second
 	MQTTPublishTimeoutEnvKey = "DGW_PUBLISH_TIMEOUT"
 )
-
-const LINKSMART = `
-╦   ╦ ╔╗╔ ╦╔═  ╔═╗ ╔╦╗ ╔═╗ ╦═╗ ╔╦╗ R
-║   ║ ║║║ ╠╩╗  ╚═╗ ║║║ ╠═╣ ╠╦╝  ║
-╩═╝ ╩ ╝╚╝ ╩ ╩  ╚═╝ ╩ ╩ ╩ ╩ ╩╚═  ╩
-`

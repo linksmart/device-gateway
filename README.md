@@ -1,4 +1,6 @@
 # LinkSmart Device Gateway
+## Documentation
+https://docs.linksmart.eu/display/DGW
 
 ## Compile from source
 ```

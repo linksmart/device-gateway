@@ -1,6 +1,6 @@
 {
   "id": "example-dgw",
-  "description": "Example LinkSmart® Device Gateway",
+  "description": "Example LinkSmart Device Gateway",
   "publicEndpoint": "http://fqdn-of-the-host:8080",
   "staticDir": "./static",
   "catalog": [],
