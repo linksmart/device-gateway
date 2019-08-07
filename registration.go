@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"sync"
 
-	_ "code.linksmart.eu/com/go-sec/auth/keycloak/obtainer"
-	"code.linksmart.eu/com/go-sec/auth/obtainer"
-	catalog "code.linksmart.eu/rc/resource-catalog/catalog"
+	_ "github.com/linksmart/go-sec/auth/keycloak/obtainer"
+	"github.com/linksmart/go-sec/auth/obtainer"
+	catalog "github.com/linksmart/resource-catalog/catalog"
 )
 
 // Parses config into a slice of configured devices

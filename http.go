@@ -11,12 +11,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	_ "code.linksmart.eu/com/go-sec/auth/keycloak/validator"
-	"code.linksmart.eu/com/go-sec/auth/validator"
 	"github.com/codegangsta/negroni"
 	"github.com/gorilla/context"
 	"github.com/gorilla/mux"
 	"github.com/justinas/alice"
+	_ "github.com/linksmart/go-sec/auth/keycloak/validator"
+	"github.com/linksmart/go-sec/auth/validator"
 )
 
 // errorResponse used to serialize errors into JSON for RESTful responses

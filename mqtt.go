@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	sc "code.linksmart.eu/sc/service-catalog/catalog"
-	scClient "code.linksmart.eu/sc/service-catalog/client"
-	"code.linksmart.eu/sc/service-catalog/discovery"
 	paho "github.com/eclipse/paho.mqtt.golang"
+	sc "github.com/linksmart/service-catalog/catalog"
+	scClient "github.com/linksmart/service-catalog/client"
+	"github.com/linksmart/service-catalog/discovery"
 )
 
 // MQTTConnector provides paho protocol connectivity

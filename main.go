@@ -5,13 +5,13 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/satori/go.uuid"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/oleksandr/bonjour"
+	uuid "github.com/satori/go.uuid"
 )
 
 const LINKSMART = `

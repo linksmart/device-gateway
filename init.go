@@ -3,12 +3,13 @@
 package main
 
 import (
-	paho "github.com/eclipse/paho.mqtt.golang"
-	"github.com/farshidtz/elog"
 	"log"
 	"os"
 	"strconv"
 	"time"
+
+	paho "github.com/eclipse/paho.mqtt.golang"
+	"github.com/farshidtz/elog"
 )
 
 var logger *elog.Logger

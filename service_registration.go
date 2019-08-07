@@ -3,10 +3,10 @@
 package main
 
 import (
-	_ "code.linksmart.eu/com/go-sec/auth/keycloak/obtainer"
-	"code.linksmart.eu/com/go-sec/auth/obtainer"
-	"code.linksmart.eu/sc/service-catalog/catalog"
-	"code.linksmart.eu/sc/service-catalog/client"
+	_ "github.com/linksmart/go-sec/auth/keycloak/obtainer"
+	"github.com/linksmart/go-sec/auth/obtainer"
+	"github.com/linksmart/service-catalog/catalog"
+	"github.com/linksmart/service-catalog/client"
 )
 
 // TODO: register via MQTT

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"code.linksmart.eu/com/go-sec/authz"
+	"github.com/linksmart/go-sec/authz"
 )
 
 //
