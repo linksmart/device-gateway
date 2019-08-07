@@ -104,8 +104,7 @@ type Config struct {
 	Description    string                       `json:"description"`
 	DnssdEnabled   bool                         `json:"dnssdEnabled"`
 	PublicEndpoint string                       `json:"publicEndpoint"`
-	StaticDir      string                       `json:"staticDir`
-	Catalog        []Catalog                    `json:"catalog"`
+	StaticDir      string                       `json:"staticDir"`
 	Http           HttpConfig                   `json:"http"`
 	Protocols      map[ProtocolType]interface{} `json:"protocols"`
 	Devices        []Device                     `json:"devices"`
@@ -150,21 +149,6 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// Check if remote catalogs configs are valid
-	for _, cat := range c.Catalog {
-		err := cat.Validate()
-		if err != nil {
-			return err
-		}
-		if cat.Auth != nil {
-			// Validate ticket obtainer config
-			err = cat.Auth.Validate()
-			if err != nil {
-				return err
-			}
-		}
-	}
-
 	if c.Auth.Enabled {
 		// Validate ticket validator config
 		err = c.Auth.Validate()
@@ -186,22 +170,6 @@ func (c *Config) FindResource(resourceId string) (*Resource, bool) {
 		}
 	}
 	return nil, false
-}
-
-//
-// Catalog config
-//
-type Catalog struct {
-	Discover bool          `json:"discover"`
-	Endpoint string        `json:"endpoint"`
-	Auth     *ObtainerConf `json:"auth"`
-}
-
-func (c *Catalog) Validate() error {
-	if c.Endpoint == "" && c.Discover == false {
-		return fmt.Errorf("Catalog must have either endpoint or discovery flag defined")
-	}
-	return nil
 }
 
 //

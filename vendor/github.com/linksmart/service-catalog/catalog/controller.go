@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"code.linksmart.eu/sc/service-catalog/utils"
+	"github.com/linksmart/service-catalog/utils"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -169,7 +169,6 @@ func (c *Controller) total() (int, error) {
 }
 
 func (c *Controller) cleanExpired() {
-	logger.Println("cleanExpired() started cleanup routine.")
 
 	clean := func() {
 		c.Lock()
