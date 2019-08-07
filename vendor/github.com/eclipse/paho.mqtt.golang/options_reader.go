@@ -102,7 +102,7 @@ func (r *ClientOptionsReader) TLSConfig() tls.Config {
 }
 
 func (r *ClientOptionsReader) KeepAlive() time.Duration {
-	s := time.Duration(r.options.KeepAlive * int64(time.Second))
+	s := r.options.KeepAlive
 	return s
 }
 

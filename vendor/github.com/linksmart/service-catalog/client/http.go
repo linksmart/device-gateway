@@ -9,9 +9,9 @@ import (
 	"net/http"
 	"net/url"
 
-	"code.linksmart.eu/com/go-sec/auth/obtainer"
-	"code.linksmart.eu/sc/service-catalog/catalog"
-	"code.linksmart.eu/sc/service-catalog/utils"
+	"github.com/linksmart/go-sec/auth/obtainer"
+	"github.com/linksmart/service-catalog/catalog"
+	"github.com/linksmart/service-catalog/utils"
 )
 
 type httpClient struct {

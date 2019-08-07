@@ -70,12 +70,6 @@ func main() {
 
 	go restServer.start()
 
-	// Parse device configurations
-	devices := configureDevices(config)
-
-	// register in remote catalogs
-	regChannels, wg := registerInRemoteCatalog(devices, config)
-
 	// Register in Service Catalog
 	unregisterService, err := registerInServiceCatalog(config, discoveryCh)
 	if err != nil {
@@ -126,19 +120,8 @@ func main() {
 		mqttConnector.stop()
 	}
 
-	// Unregister in the remote catalog(s)
-	for _, sigCh := range regChannels {
-		// Notify if the routine hasn't returned already
-		select {
-		case sigCh <- true:
-		default:
-		}
-	}
-
 	// Unregister from Service Catalog
 	unregisterService()
-
-	wg.Wait()
 
 	logger.Println("Stopped")
 	os.Exit(0)
