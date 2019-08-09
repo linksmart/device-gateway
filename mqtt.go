@@ -48,18 +48,12 @@ func newMQTTConnector(conf *Config, dataReqCh chan<- DataRequest) *MQTTConnector
 		for _, protocol := range d.Protocols {
 			if strings.ToUpper(protocol.Type) == MQTTProtocolType {
 				requiresMqtt = true
-				// if topic is not provided - use <dgw-id>/<device_name>
-				topic := protocol.Topic
-				if topic == "" {
-					topic = fmt.Sprintf("%s/%s", conf.Id, d.Name)
-				}
-
 				for _, method := range protocol.Methods {
 					if strings.ToUpper(method) == MQTTPubMethod {
-						pubTopics[d.Name] = topic
+						pubTopics[d.Name] = protocol.Topic
 						pubRetained[d.Name] = protocol.Retained
 					} else if strings.ToUpper(method) == MQTTSubMethod {
-						subTopics[d.Name] = topic
+						subTopics[d.Name] = protocol.Topic
 					} else {
 						log.Printf("Ignoring MQTT protocol for %s device: Invalid method: %s", d.Name, method)
 					}

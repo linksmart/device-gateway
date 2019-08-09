@@ -9,18 +9,19 @@ const (
 	AgentResponseCacheTTL = 3 * time.Second
 
 	// DNS-SD service name (type)
-	DNSSDServiceTypeDGW  = "_linksmart-dgw._tcp"
-	DNSSDServiceTypeMQTT = "_mqtt._tcp"
+	DNSSDServiceTypeDGW       = "_linksmart-dgw._tcp"
+	DNSSDServiceTypeMQTT      = "_mqtt._tcp"
+	DNSSDServiceTypeDGWDevice = "_device._linksmart-dgw._tcp"
 
 	// HTTP
 	HTTPProtocolType = "HTTP"
 
 	// MQTT
-	MQTTProtocolType          = "MQTT"
-	MQTTDefaultQoS            = 1
-	MQTTMaxReconnectInterval  = 60 * time.Second
-	MQTTMaxRediscoverInterval = 60 * time.Second
-	MQTTPublishTimeoutEnvKey  = "DGW_PUBLISH_TIMEOUT"
-	MQTTPubMethod             = "PUB"
-	MQTTSubMethod             = "SUB"
+	MQTTProtocolType               = "MQTT"
+	MQTTDefaultQoS            byte = 1
+	MQTTMaxReconnectInterval       = 60 * time.Second
+	MQTTMaxRediscoverInterval      = 60 * time.Second
+	MQTTPublishTimeoutEnvKey       = "DGW_PUBLISH_TIMEOUT"
+	MQTTPubMethod                  = "PUB"
+	MQTTSubMethod                  = "SUB"
 )
