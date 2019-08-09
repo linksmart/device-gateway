@@ -116,7 +116,7 @@ func (am *AgentManager) start() {
 
 			// Publish if required
 			if am.publishOutbox != nil {
-				device, ok := am.config.findDevice(resp.ResourceId)
+				device, ok := am.config.getDevice(resp.ResourceId)
 				if !ok {
 					continue
 				}
@@ -142,7 +142,7 @@ func (am *AgentManager) start() {
 			// If not available execute the task or return not available error for timer/service
 			logger.Printf("AgentManager.start() Request for data from %s", req.ResourceId)
 
-			device, ok := am.config.findDevice(req.ResourceId)
+			device, ok := am.config.getDevice(req.ResourceId)
 			if !ok {
 				logger.Printf("AgentManager.start() ERROR: resource %s not found!", req.ResourceId)
 				if req.Reply != nil {

@@ -145,22 +145,18 @@ func (api *RESTfulAPI) mountResources() {
 	for _, device := range api.config.devices {
 		for _, protocol := range device.Protocols {
 			if strings.ToUpper(protocol.Type) == HTTPProtocolType {
-				path := protocol.Path
-				if path == "" {
-					path = "/" + device.Name
-				}
-				logger.Println("RESTfulAPI.mountResources() Mounting resource:", path)
+				logger.Println("RESTfulAPI.mountResources() Mounting resource:", protocol.HTTP.Path)
 				rid := device.Name
 				for _, method := range protocol.Methods {
 					switch method {
 					case "GET":
-						api.router.Methods("GET").Path(path).Handler(
+						api.router.Methods("GET").Path(protocol.HTTP.Path).Handler(
 							api.commonHandlers.ThenFunc(api.createResourceGetHandler(rid)))
 					case "PUT":
-						api.router.Methods("PUT").Path(path).Handler(
+						api.router.Methods("PUT").Path(protocol.HTTP.Path).Handler(
 							api.commonHandlers.ThenFunc(api.createResourcePutHandler(rid)))
 					}
-					logger.Printf("Added HTTP %s handler: %s", method, path)
+					logger.Printf("Added HTTP %s handler: %s", method, protocol.HTTP.Path)
 				}
 			}
 		}
@@ -172,7 +168,7 @@ func (api *RESTfulAPI) createResourceGetHandler(resourceId string) http.HandlerF
 	return func(rw http.ResponseWriter, req *http.Request) {
 		logger.Printf("RESTfulAPI.createResourceGetHandler() %s %s", req.Method, req.RequestURI)
 
-		resource, found := api.config.findDevice(resourceId)
+		resource, found := api.config.getDevice(resourceId)
 		if !found {
 			api.respondWithNotFound(rw, "Resource does not exist")
 			return
@@ -220,7 +216,7 @@ func (api *RESTfulAPI) createResourcePutHandler(resourceId string) http.HandlerF
 			}
 
 			// Check if mediaType is supported by resource
-			resource, found := api.config.findDevice(resourceId)
+			resource, found := api.config.getDevice(resourceId)
 			if !found {
 				api.respondWithNotFound(rw, "Resource does not exist")
 				return

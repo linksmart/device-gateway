@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/linksmart/go-sec/authz"
+	uuid "github.com/satori/go.uuid"
 )
 
 //
@@ -60,7 +61,6 @@ func loadConfig(confPath string) (*Config, error) {
 
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,51 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-func (c *Config) findDevice(name string) (*Device, bool) {
+func reviseConfig(config *Config) *Config {
+	if config.Id == "" {
+		config.Id = uuid.NewV4().String()
+		logger.Printf("Generated random service ID: %s", config.Id)
+	}
+
+	logger.Printf("Revising device configurations:")
+	for di := range config.devices {
+		logger.Printf("Device name: %s", config.devices[di].Name)
+		for pi := range config.devices[di].Protocols {
+			switch config.devices[di].Protocols[pi].Type {
+			case HTTPProtocolType:
+				if config.devices[di].Protocols[pi].HTTP == nil {
+					config.devices[di].Protocols[pi].HTTP = &HTTP{}
+				}
+				if config.devices[di].Protocols[pi].HTTP.Path == "" {
+					path := "/" + config.devices[di].Name
+					config.devices[di].Protocols[pi].HTTP.Path = path
+					logger.Printf("Protocols[%d]: HTTP path not set. Used /<device-name>: %s", pi, path)
+				}
+			case MQTTProtocolType:
+				if config.devices[di].Protocols[pi].MQTT == nil {
+					config.devices[di].Protocols[pi].MQTT = &MQTT{}
+				}
+				if config.devices[di].Protocols[pi].MQTT.Topic == "" {
+					topic := config.Id + "/" + config.devices[di].Name
+					config.devices[di].Protocols[pi].MQTT.Topic = topic
+					logger.Printf("Protocols[%d]: MQTT topic not set. Used <dgw-id>/<device-name>: %s", pi, topic)
+				}
+				if config.devices[di].Protocols[pi].MQTT.QoS == nil {
+					def := MQTTDefaultQoS
+					config.devices[di].Protocols[pi].MQTT.QoS = &def
+					logger.Printf("Protocols[%d]: MQTT QoS not set. Used default: %d", pi, def)
+				}
+				if config.devices[di].Protocols[pi].MQTT.Client == nil {
+					config.devices[di].Protocols[pi].MQTT.Client = &config.Protocols.MQTT
+					logger.Printf("Protocols[%d]: MQTT QoS not set. Used global client: %s", pi, config.Protocols.MQTT.URI)
+				}
+			}
+		}
+	}
+	return config
+}
+
+func (c *Config) getDevice(name string) (*Device, bool) {
 	for i := range c.devices {
 		if name == c.devices[i].Name {
 			return &c.devices[i], true
@@ -219,8 +263,11 @@ func (d *Device) validate() error {
 
 		switch strings.ToUpper(protocol.Type) {
 		case MQTTProtocolType:
-			mqtt := protocol.MQTTProtocol
-			if mqtt.QoS > 2 {
+			mqtt := protocol.MQTT
+			if len(protocol.Methods) == 0 {
+				return fmt.Errorf("MQTT methods not set")
+			}
+			if mqtt.QoS != nil && *mqtt.QoS > 2 {
 				return fmt.Errorf("MQTT QoS should be [0-2], not %d", mqtt.QoS)
 			}
 			if mqtt.Client != nil {
@@ -230,7 +277,9 @@ func (d *Device) validate() error {
 				}
 			}
 		case HTTPProtocolType:
-			//
+			if len(protocol.Methods) == 0 {
+				return fmt.Errorf("HTTP methods not set")
+			}
 		default:
 			return fmt.Errorf("unknown protocol: %T", protocol.Type)
 		}
@@ -241,18 +290,18 @@ func (d *Device) validate() error {
 type DeviceProtocolConfig struct {
 	Type    string
 	Methods []string `json:"methods"`
-	*MQTTProtocol
-	*HTTPProtocol
+	*MQTT
+	*HTTP
 }
 
-type MQTTProtocol struct {
+type MQTT struct {
 	Topic    string              `json:"topic"`
 	Retained bool                `json:"retained"`
-	QoS      uint8               `json:"qos"`
+	QoS      *uint8              `json:"qos"`
 	Client   *MqttProtocolConfig `json:"client"` // overrides default
 }
 
-type HTTPProtocol struct {
+type HTTP struct {
 	Path string `json:"path"`
 }
 

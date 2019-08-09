@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/oleksandr/bonjour"
-	uuid "github.com/satori/go.uuid"
 )
 
 const LINKSMART = `
@@ -41,10 +40,7 @@ func main() {
 		logger.Printf("Failed to load configuration: %v\n", err)
 		os.Exit(1)
 	}
-	if config.Id == "" {
-		config.Id = uuid.NewV4().String()
-		logger.Printf("Generated random service ID: %s", config.Id)
-	}
+	config = reviseConfig(config)
 
 	// Agents' process manager
 	agentManager := newAgentManager(config)
