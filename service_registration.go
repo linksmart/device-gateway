@@ -16,27 +16,33 @@ func registerInServiceCatalog(conf *Config, apiDiscovery <-chan string) (func() 
 		return func() error { return nil }, nil
 	}
 
-	var RESTEndpoint, MQTTEndpoint string
-	if conf.Protocols[ProtocolTypeREST] != nil {
-		RESTEndpoint = conf.PublicEndpoint + conf.Protocols[ProtocolTypeREST].(RestProtocol).Location
-	}
-	if conf.Protocols[ProtocolTypeMQTT] != nil {
-		MQTTEndpoint = conf.Protocols[ProtocolTypeMQTT].(MqttProtocol).URL
+	//var HTTPEndpoint, MQTTEndpoint string
+	//if conf.Protocols.HTTP != nil {
+	//	HTTPEndpoint = conf.Protocols.HTTP.PublicEndpoint
+	//}
+	//if conf.Protocols.MQTT != nil {
+	//	MQTTEndpoint = conf.Protocols.MQTT.URI
+	//}
+
+	var deviceNames []string
+	for _, device := range conf.devices {
+		deviceNames = append(deviceNames, device.Name)
 	}
 
 	service := catalog.Service{
 		ID:          conf.Id,
 		Name:        "_linksmart-dgw._tcp",
 		Description: conf.Description,
-		APIs:        map[string]string{catalog.APITypeHTTP: RESTEndpoint, catalog.APITypeMQTT: MQTTEndpoint},
+		//APIs:        map[string]string{catalog.APITypeHTTP: RESTEndpoint, catalog.APITypeMQTT: MQTTEndpoint},
 		Docs: []catalog.Doc{{
 			Description: "Documentation",
 			URL:         "https://docs.linksmart.eu/display/DGW",
 			Type:        "text/html",
 		}},
 		Meta: map[string]interface{}{
-			"ls_codename": "DGW",
-			"api_version": Version,
+			"codename":   "DGW",
+			"apiVersion": Version,
+			"devices":    deviceNames,
 		},
 		TTL: conf.ServiceCatalog.TTL,
 	}

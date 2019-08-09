@@ -25,36 +25,10 @@ func loadConfig(confPath string) (*Config, error) {
 		return nil, err
 	}
 
-	rawConfig := new(struct {
-		*Config
-		Protocols map[ProtocolType]json.RawMessage `json:"protocols"`
-	})
-	err = json.Unmarshal(file, rawConfig)
+	var config Config
+	err = json.Unmarshal(file, &config)
 	if err != nil {
 		return nil, err
-	}
-	config := rawConfig.Config
-	config.Protocols = make(map[ProtocolType]interface{})
-
-	// Parse config protocols
-	for k, v := range rawConfig.Protocols {
-		switch k {
-		case ProtocolTypeREST:
-			protoConf := RestProtocol{}
-			err := json.Unmarshal(v, &protoConf)
-			if err != nil {
-				return nil, errors.New("Invalid config of REST protocol")
-			}
-			config.Protocols[ProtocolTypeREST] = protoConf
-
-		case ProtocolTypeMQTT:
-			protoConf := MqttProtocol{}
-			err := json.Unmarshal(v, &protoConf)
-			if err != nil {
-				return nil, errors.New("Invalid config of MQTT protocol")
-			}
-			config.Protocols[ProtocolTypeMQTT] = protoConf
-		}
 	}
 
 	dir := filepath.Dir(confPath)
@@ -76,12 +50,13 @@ func loadConfig(confPath string) (*Config, error) {
 			return err
 		}
 
-		device := new(Device)
-		err = json.Unmarshal(f, device)
+		var device Device
+		err = json.Unmarshal(f, &device)
 		if err != nil {
 			return err
 		}
-		config.Devices = append(config.Devices, *device)
+		device.configPath = path
+		config.devices = append(config.devices, device)
 
 		return nil
 	})
@@ -93,80 +68,53 @@ func loadConfig(confPath string) (*Config, error) {
 	if err = config.Validate(); err != nil {
 		return nil, err
 	}
-	return config, nil
+	return &config, nil
 }
 
 //
-// Main configuration container
+// Main configuration struct
 //
 type Config struct {
-	Id             string                       `json:"id"`
-	Description    string                       `json:"description"`
-	DnssdEnabled   bool                         `json:"dnssdEnabled"`
-	PublicEndpoint string                       `json:"publicEndpoint"`
-	StaticDir      string                       `json:"staticDir"`
-	Http           HttpConfig                   `json:"http"`
-	Protocols      map[ProtocolType]interface{} `json:"protocols"`
-	Devices        []Device                     `json:"devices"`
-	Auth           ValidatorConf                `json:"auth"`
-	ServiceCatalog ServiceCatalogConf           `json:"serviceCatalog"`
+	Id             string             `json:"id"` // used as service id, mqtt client id,
+	Description    string             `json:"description"`
+	DnssdEnabled   bool               `json:"dnssdEnabled"`
+	Protocols      Protocols          `json:"protocols"`
+	ServiceCatalog ServiceCatalogConf `json:"serviceCatalog"`
+	devices        []Device
+}
+
+type Protocols struct {
+	HTTP HttpProtocolConfig `json:"HTTP"`
+	MQTT MqttProtocolConfig `json:"MQTT"`
 }
 
 // Validates the loaded configuration
 func (c *Config) Validate() error {
-	// Check if PublicEndpoint is valid
-	if c.PublicEndpoint == "" {
-		return fmt.Errorf("PublicEndpoint has to be defined")
-	}
-	_, err := url.Parse(c.PublicEndpoint)
-	if err != nil {
-		return fmt.Errorf("PublicEndpoint should be a valid URL")
-	}
 
-	// Check if HTTP configuration is valid
-	err = c.Http.Validate()
+	err := c.Protocols.HTTP.Validate()
 	if err != nil {
 		return err
 	}
 
-	_, ok := c.Protocols[ProtocolTypeREST]
-	// Check if REST configuration is valid
-	if ok {
-		restConf := c.Protocols[ProtocolTypeREST].(RestProtocol)
-		err := restConf.Validate()
-		if err != nil {
-			return err
-		}
+	err = c.Protocols.MQTT.Validate()
+	if err != nil {
+		return err
 	}
 
-	_, ok = c.Protocols[ProtocolTypeMQTT]
-	// Check if MQTT configuration is valid
-	if ok {
-		mqttConf := c.Protocols[ProtocolTypeMQTT].(MqttProtocol)
-		err := mqttConf.Validate()
+	for _, device := range c.devices {
+		err = device.validate()
 		if err != nil {
-			return err
-		}
-	}
-
-	if c.Auth.Enabled {
-		// Validate ticket validator config
-		err = c.Auth.Validate()
-		if err != nil {
-			return err
+			return fmt.Errorf("%s: %s", device.configPath, err)
 		}
 	}
 
 	return nil
 }
 
-// Finds resource record by given resource id
-func (c *Config) FindResource(resourceId string) (*Resource, bool) {
-	for _, d := range c.Devices {
-		for _, r := range d.Resources {
-			if resourceId == d.ResourceId(r.Name) {
-				return &r, true
-			}
+func (c *Config) findDevice(name string) (*Device, bool) {
+	for i := range c.devices {
+		if name == c.devices[i].Name {
+			return &c.devices[i], true
 		}
 	}
 	return nil, false
@@ -175,37 +123,41 @@ func (c *Config) FindResource(resourceId string) (*Resource, bool) {
 //
 // Http config (for protocols using it)
 //
-type HttpConfig struct {
-	BindAddr string `json:"bindAddr"`
-	BindPort int    `json:"bindPort"`
+type HttpProtocolConfig struct {
+	PublicEndpoint string        `json:"publicEndpoint"`
+	BindAddr       string        `json:"bindAddr"`
+	BindPort       int           `json:"bindPort"`
+	Auth           ValidatorConf `json:"auth"`
 }
 
-func (h *HttpConfig) Validate() error {
+func (h *HttpProtocolConfig) Validate() error {
 	if h.BindAddr == "" || h.BindPort == 0 {
-		return fmt.Errorf("HTTP bindAddr and bindPort have to be defined")
+		return fmt.Errorf("HTTP bindAddr and bindPort not set")
 	}
+	// Check if PublicEndpoint is valid
+	if h.PublicEndpoint == "" {
+		return fmt.Errorf("HTTP publicEndpoint not set")
+	}
+	_, err := url.Parse(h.PublicEndpoint)
+	if err != nil {
+		return fmt.Errorf("HTTP publicEndpoint not a valid URL")
+	}
+
+	if h.Auth.Enabled {
+		// Validate ticket validator config
+		err = h.Auth.Validate()
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
-//
-// Protocol entry and types
-//
-type RestProtocol struct {
-	Location string `json:"location"`
-}
-
-func (p *RestProtocol) Validate() error {
-	if p.Location == "" {
-		return fmt.Errorf("REST location has to be defined")
-	}
-	return nil
-}
-
-type MqttProtocol struct {
+type MqttProtocolConfig struct {
 	Discover      bool   `json:"discover"`
 	DiscoverID    string `json:"discoverID"`
-	URL           string `json:"url"`
-	Prefix        string `json:"prefix"`
+	URI           string `json:"uri"`
 	Username      string `json:"username"`
 	Password      string `json:"password"`
 	CaFile        string `json:"caFile"`
@@ -214,14 +166,14 @@ type MqttProtocol struct {
 	OfflineBuffer uint   `json:"offlineBuffer"`
 }
 
-func (p *MqttProtocol) Validate() error {
+func (p *MqttProtocolConfig) Validate() error {
 	if !p.Discover {
-		url, err := url.Parse(p.URL)
+		parsedURL, err := url.Parse(p.URI)
 		if err != nil {
-			return fmt.Errorf("MQTT broker URL must be a valid URI in the format scheme://host:port")
+			return fmt.Errorf("MQTT broker URI must be a valid URI in the format scheme://host:port")
 		}
-		if url.Scheme != "tcp" && url.Scheme != "ssl" {
-			return fmt.Errorf("MQTT broker URL scheme must be either 'tcp' or 'ssl'")
+		if parsedURL.Scheme != "tcp" && parsedURL.Scheme != "ssl" {
+			return fmt.Errorf("MQTT broker URI scheme must be either 'tcp' or 'ssl'")
 		}
 	}
 
@@ -245,50 +197,67 @@ func (p *MqttProtocol) Validate() error {
 	return nil
 }
 
-type ProtocolType string
-
-const (
-	ProtocolTypeUnknown ProtocolType = ""
-	ProtocolTypeREST    ProtocolType = "REST"
-	ProtocolTypeMQTT    ProtocolType = "MQTT"
-)
-
 //
 // Device information container (has one or many resources)
 //
 type Device struct {
+	configPath  string
 	Name        string
 	Description string
 	Meta        map[string]interface{}
-	Ttl         uint
-	Resources   []Resource
+	Ttl         uint // follow dgw's ttl?
+	Agent       Agent
+	ContentType string
+	Protocols   []DeviceProtocolConfig
 }
 
-func (d *Device) ResourceId(name string) string {
+func (d *Device) validate() error {
+	if strings.HasPrefix(d.Name, "/") || strings.HasSuffix(d.Name, "/") {
+		return fmt.Errorf("name should not start or end with slash: %s", d.Name)
+	}
+	for _, protocol := range d.Protocols {
+
+		switch strings.ToUpper(protocol.Type) {
+		case MQTTProtocolType:
+			mqtt := protocol.MQTTProtocol
+			if mqtt.QoS > 2 {
+				return fmt.Errorf("MQTT QoS should be [0-2], not %d", mqtt.QoS)
+			}
+			if mqtt.Client != nil {
+				err := mqtt.Client.Validate()
+				if err != nil {
+					return fmt.Errorf("MQTT client config is invalid: %s", err)
+				}
+			}
+		case HTTPProtocolType:
+			//
+		default:
+			return fmt.Errorf("unknown protocol: %T", protocol.Type)
+		}
+	}
+	return nil
+}
+
+type DeviceProtocolConfig struct {
+	Type    string
+	Methods []string `json:"methods"`
+	*MQTTProtocol
+	*HTTPProtocol
+}
+
+type MQTTProtocol struct {
+	Topic    string              `json:"topic"`
+	Retained bool                `json:"retained"`
+	QoS      uint8               `json:"qos"`
+	Client   *MqttProtocolConfig `json:"client"` // overrides default
+}
+
+type HTTPProtocol struct {
+	Path string `json:"path"`
+}
+
+func (d *Device) DeviceName(name string) string {
 	return fmt.Sprintf("%s/%s", d.Name, name)
-}
-
-//
-// Resource information container (belongs to device)
-//
-type Resource struct {
-	Name           string
-	Meta           map[string]interface{}
-	Representation map[string]interface{}
-	Protocols      []SupportedProtocol
-	Agent          Agent
-}
-
-//
-// Protocol supported by resource and its supported content-types/methods
-//
-type SupportedProtocol struct {
-	Type         ProtocolType
-	Methods      []string
-	ContentTypes []string `json:"content-types"`
-	PubTopic     string   `json:"pub_topic"`
-	PubRetained  bool     `json:"pub_retained"`
-	SubTopic     string   `json:"sub_topic"`
 }
 
 //
