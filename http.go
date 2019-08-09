@@ -28,7 +28,7 @@ type errorResponse struct {
 // for device gateway
 type RESTfulAPI struct {
 	config         *Config
-	restConfig     *RestProtocol
+	httpConfig     *HttpProtocolConfig // remove?
 	router         *mux.Router
 	dataCh         chan<- DataRequest
 	commonHandlers alice.Chain
@@ -36,7 +36,6 @@ type RESTfulAPI struct {
 
 // Constructs a RESTfulAPI data structure
 func newRESTfulAPI(conf *Config, dataCh chan<- DataRequest) (*RESTfulAPI, error) {
-	restConfig, _ := conf.Protocols[ProtocolTypeREST].(RestProtocol)
 
 	// Common handlers
 	commonHandlers := alice.New(
@@ -44,14 +43,10 @@ func newRESTfulAPI(conf *Config, dataCh chan<- DataRequest) (*RESTfulAPI, error)
 	)
 
 	// Append auth handler if enabled
-	if conf.Auth.Enabled {
+	if conf.Protocols.HTTP.Auth.Enabled {
+		auth := conf.Protocols.HTTP.Auth
 		// Setup ticket validator
-		v, err := validator.Setup(
-			conf.Auth.Provider,
-			conf.Auth.ProviderURL,
-			conf.Auth.ServiceID,
-			conf.Auth.BasicEnabled,
-			conf.Auth.Authz)
+		v, err := validator.Setup(auth.Provider, auth.ProviderURL, auth.ServiceID, auth.BasicEnabled, auth.Authz)
 		if err != nil {
 			return nil, err
 		}
@@ -61,7 +56,7 @@ func newRESTfulAPI(conf *Config, dataCh chan<- DataRequest) (*RESTfulAPI, error)
 
 	api := &RESTfulAPI{
 		config:         conf,
-		restConfig:     &restConfig,
+		httpConfig:     &conf.Protocols.HTTP,
 		router:         mux.NewRouter().StrictSlash(true),
 		dataCh:         dataCh,
 		commonHandlers: commonHandlers,
@@ -73,9 +68,7 @@ func newRESTfulAPI(conf *Config, dataCh chan<- DataRequest) (*RESTfulAPI, error)
 func (api *RESTfulAPI) start() {
 	api.mountResources()
 
-	api.router.Methods("GET", "POST").Path("/dashboard").Handler(
-		api.commonHandlers.ThenFunc(api.dashboardHandler(*confPath)))
-	api.router.Methods("GET").Path(api.restConfig.Location).Handler(
+	api.router.Methods("GET").Path("/").Handler(
 		api.commonHandlers.ThenFunc(api.indexHandler()))
 
 	err := mime.AddExtensionType(".jsonld", "application/ld+json")
@@ -87,18 +80,13 @@ func (api *RESTfulAPI) start() {
 	n := negroni.New(
 		negroni.NewRecovery(),
 		negroni.NewLogger(),
-		&negroni.Static{
-			Dir:       http.Dir(api.config.StaticDir),
-			Prefix:    StaticLocation,
-			IndexFile: "index.html",
-		},
 	)
 	// Mount router
 	n.UseHandler(api.router)
 
 	// Start the listener
-	addr := fmt.Sprintf("%v:%v", api.config.Http.BindAddr, api.config.Http.BindPort)
-	logger.Printf("RESTfulAPI.start() Starting server at http://%v%v", addr, api.restConfig.Location)
+	addr := fmt.Sprintf("%v:%v", api.httpConfig.BindAddr, api.httpConfig.BindPort)
+	logger.Printf("RESTfulAPI.start() Listenning on %v", addr)
 	n.Run(addr)
 }
 
@@ -148,34 +136,35 @@ func (api *RESTfulAPI) dashboardHandler(confPath string) http.HandlerFunc {
 
 func (api *RESTfulAPI) indexHandler() http.HandlerFunc {
 	return func(rw http.ResponseWriter, req *http.Request) {
-		b, _ := json.Marshal("Welcome to Device Gateway RESTful API")
 		rw.Header().Set("Content-Type", "application/json")
-		rw.Write(b)
+		rw.Write([]byte("Welcome to Device Gateway RESTful API"))
 	}
 }
 
 func (api *RESTfulAPI) mountResources() {
-	for _, device := range api.config.Devices {
-		for _, resource := range device.Resources {
-			for _, protocol := range resource.Protocols {
-				if protocol.Type != ProtocolTypeREST {
-					continue
+	for _, device := range api.config.devices {
+		for _, protocol := range device.Protocols {
+			if strings.ToUpper(protocol.Type) == HTTPProtocolType {
+				path := protocol.Path
+				if path == "" {
+					path = "/" + device.Name
 				}
-				uri := api.restConfig.Location + "/" + device.Name + "/" + resource.Name
-				logger.Println("RESTfulAPI.mountResources() Mounting resource:", uri)
-				rid := device.ResourceId(resource.Name)
+				logger.Println("RESTfulAPI.mountResources() Mounting resource:", path)
+				rid := device.Name
 				for _, method := range protocol.Methods {
 					switch method {
 					case "GET":
-						api.router.Methods("GET").Path(uri).Handler(
+						api.router.Methods("GET").Path(path).Handler(
 							api.commonHandlers.ThenFunc(api.createResourceGetHandler(rid)))
 					case "PUT":
-						api.router.Methods("PUT").Path(uri).Handler(
+						api.router.Methods("PUT").Path(path).Handler(
 							api.commonHandlers.ThenFunc(api.createResourcePutHandler(rid)))
 					}
+					logger.Printf("Added HTTP %s handler: %s", method, path)
 				}
 			}
 		}
+
 	}
 }
 
@@ -183,18 +172,13 @@ func (api *RESTfulAPI) createResourceGetHandler(resourceId string) http.HandlerF
 	return func(rw http.ResponseWriter, req *http.Request) {
 		logger.Printf("RESTfulAPI.createResourceGetHandler() %s %s", req.Method, req.RequestURI)
 
-		resource, found := api.config.FindResource(resourceId)
+		resource, found := api.config.findDevice(resourceId)
 		if !found {
 			api.respondWithNotFound(rw, "Resource does not exist")
 			return
 		}
 
-		// Get the first content-type
-		for _, p := range resource.Protocols {
-			if p.Type == ProtocolTypeREST && len(p.ContentTypes) > 0 {
-				rw.Header().Set("Content-Type", p.ContentTypes[0])
-			}
-		}
+		rw.Header().Set("Content-Type", resource.ContentType)
 
 		// Retrieve data
 		dr := DataRequest{
@@ -236,23 +220,12 @@ func (api *RESTfulAPI) createResourcePutHandler(resourceId string) http.HandlerF
 			}
 
 			// Check if mediaType is supported by resource
-			isSupported := false
-			resource, found := api.config.FindResource(resourceId)
+			resource, found := api.config.findDevice(resourceId)
 			if !found {
 				api.respondWithNotFound(rw, "Resource does not exist")
 				return
 			}
-			for _, p := range resource.Protocols {
-				if p.Type == ProtocolTypeREST {
-					for _, ct := range p.ContentTypes {
-						ct := strings.ToLower(ct)
-						if ct == mediaType {
-							isSupported = true
-						}
-					}
-				}
-			}
-			if !isSupported {
+			if strings.ToLower(resource.ContentType) != mediaType {
 				api.respondWithUnsupportedMediaType(rw,
 					fmt.Sprintf("`%s` media type is not supported by this resource", mediaType))
 				return

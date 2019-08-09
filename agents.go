@@ -5,6 +5,7 @@ package main
 import (
 	"io"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -86,20 +87,18 @@ func (am *AgentManager) setPublishingChannel(ch chan<- AgentResponse) {
 func (am *AgentManager) start() {
 	logger.Println("AgentManager.start()")
 
-	for _, d := range am.config.Devices {
-		for _, r := range d.Resources {
-			rid := d.ResourceId(r.Name)
-			switch r.Agent.Type {
-			case ExecTypeTimer:
-				am.createTimer(rid, r.Agent)
-			case ExecTypeTask:
-				am.createTask(rid, r.Agent)
-			case ExecTypeService:
-				am.createService(rid, r.Agent)
-			default:
-				logger.Printf("AgentManager.start() ERROR: Unsupported execution type %s for resource %s\n", r.Agent.Type, rid)
-			}
+	for _, d := range am.config.devices {
+		switch d.Agent.Type {
+		case ExecTypeTimer:
+			am.createTimer(d.Name, d.Agent)
+		case ExecTypeTask:
+			am.createTask(d.Name, d.Agent)
+		case ExecTypeService:
+			am.createService(d.Name, d.Agent)
+		default:
+			logger.Printf("AgentManager.start() ERROR: Unsupported execution type %s for resource %s\n", d.Agent.Type, d.Name)
 		}
+
 	}
 
 	// This is the main inboxes handling loop
@@ -117,14 +116,14 @@ func (am *AgentManager) start() {
 
 			// Publish if required
 			if am.publishOutbox != nil {
-				resource, ok := am.config.FindResource(resp.ResourceId)
+				device, ok := am.config.findDevice(resp.ResourceId)
 				if !ok {
 					continue
 				}
 				// Publish only if resource supports MQTT (and is task/service)
-				for _, p := range resource.Protocols {
-					if p.Type == ProtocolTypeMQTT {
-						if resource.Agent.Type == ExecTypeTimer || resource.Agent.Type == ExecTypeService {
+				for _, protocol := range device.Protocols {
+					if strings.ToUpper(protocol.Type) == MQTTProtocolType {
+						if device.Agent.Type == ExecTypeTimer || device.Agent.Type == ExecTypeService {
 							// Send data with a timeout (to avoid blocking data receival)
 							select {
 							case am.publishOutbox <- resp:
@@ -143,7 +142,7 @@ func (am *AgentManager) start() {
 			// If not available execute the task or return not available error for timer/service
 			logger.Printf("AgentManager.start() Request for data from %s", req.ResourceId)
 
-			resource, ok := am.config.FindResource(req.ResourceId)
+			device, ok := am.config.findDevice(req.ResourceId)
 			if !ok {
 				logger.Printf("AgentManager.start() ERROR: resource %s not found!", req.ResourceId)
 				if req.Reply != nil {
@@ -158,8 +157,8 @@ func (am *AgentManager) start() {
 
 			// For Write data requests
 			if req.Type == DataRequestTypeWrite {
-				if resource.Agent.Type == ExecTypeTimer || resource.Agent.Type == ExecTypeTask {
-					am.executeTask(req.ResourceId, resource.Agent, req.Arguments)
+				if device.Agent.Type == ExecTypeTimer || device.Agent.Type == ExecTypeTask {
+					am.executeTask(req.ResourceId, device.Agent, req.Arguments)
 					// Respond only if the Reply channel is not nil
 					if req.Reply != nil {
 						req.Reply <- AgentResponse{
@@ -169,7 +168,7 @@ func (am *AgentManager) start() {
 						}
 					}
 
-				} else if resource.Agent.Type == ExecTypeService {
+				} else if device.Agent.Type == ExecTypeService {
 					pipe, ok := am.serviceInpipes[req.ResourceId]
 					if !ok {
 						// Respond only if the Reply channel is not nil
@@ -207,7 +206,7 @@ func (am *AgentManager) start() {
 					}
 
 				} else {
-					logger.Printf("AgentManager.start() ERROR: Unsupported execution type %s for resource %s!", resource.Agent.Type, req.ResourceId)
+					logger.Printf("AgentManager.start() ERROR: Unsupported execution type %s for resource %s!", device.Agent.Type, req.ResourceId)
 					// Respond only if the Reply channel is not nil
 					if req.Reply != nil {
 						req.Reply <- AgentResponse{
@@ -222,15 +221,15 @@ func (am *AgentManager) start() {
 
 			// For Read data requests
 			resp, ok := am.dataCache[req.ResourceId]
-			if ok && (resource.Agent.Type != ExecTypeTask || time.Now().Sub(resp.Cached) <= AgentResponseCacheTTL) {
+			if ok && (device.Agent.Type != ExecTypeTask || time.Now().Sub(resp.Cached) <= AgentResponseCacheTTL) {
 				logger.Printf("AgentManager.start() Cache HIT for resource %s", req.ResourceId)
 				req.Reply <- resp
 				continue
 			}
-			if resource.Agent.Type == ExecTypeTask {
+			if device.Agent.Type == ExecTypeTask {
 				// execute task, cache data and return
 				logger.Printf("AgentManager.start() Cache MISSED for resource %s", req.ResourceId)
-				resp := am.executeTask(req.ResourceId, resource.Agent, nil)
+				resp := am.executeTask(req.ResourceId, device.Agent, nil)
 				am.dataCache[resp.ResourceId] = resp
 				req.Reply <- resp
 				continue

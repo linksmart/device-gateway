@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"strings"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 
 // MQTTConnector provides paho protocol connectivity
 type MQTTConnector struct {
-	config                 *MqttProtocol
+	config                 *MqttProtocolConfig
 	clientID               string
 	client                 paho.Client
 	pubCh                  chan AgentResponse
@@ -35,36 +36,37 @@ var WaitTimeout time.Duration = 0 // overriden by environment variable
 
 func newMQTTConnector(conf *Config, dataReqCh chan<- DataRequest) *MQTTConnector {
 	// Check if we need to publish to paho
-	config, ok := conf.Protocols[ProtocolTypeMQTT].(MqttProtocol)
-	if !ok {
-		return nil
-	}
+	config := conf.Protocols.MQTT
 
 	// check whether paho is required at all and set pub/sub topics for each resource
 	pubTopics := make(map[string]string)
 	pubRetained := make(map[string]bool)
-	subTopicsRvsd := make(map[string]string)
+	subTopics := make(map[string]string)
 	requiresMqtt := false
-	for _, d := range conf.Devices {
-		for _, r := range d.Resources {
-			for _, p := range r.Protocols {
-				if p.Type == ProtocolTypeMQTT {
-					requiresMqtt = true
-					rid := d.ResourceId(r.Name)
-					// if pub_topic is not provided - use default /prefix/<device_name>/<resource_name>
-					if p.PubTopic != "" {
-						pubTopics[rid] = p.PubTopic
+	for _, d := range conf.devices {
+
+		for _, protocol := range d.Protocols {
+			if strings.ToUpper(protocol.Type) == MQTTProtocolType {
+				requiresMqtt = true
+				// if topic is not provided - use <dgw-id>/<device_name>
+				topic := protocol.Topic
+				if topic == "" {
+					topic = fmt.Sprintf("%s/%s", conf.Id, d.Name)
+				}
+
+				for _, method := range protocol.Methods {
+					if strings.ToUpper(method) == MQTTPubMethod {
+						pubTopics[d.Name] = topic
+						pubRetained[d.Name] = protocol.Retained
+					} else if strings.ToUpper(method) == MQTTSubMethod {
+						subTopics[d.Name] = topic
 					} else {
-						pubTopics[rid] = fmt.Sprintf("%s/%s", config.Prefix, rid)
-					}
-					pubRetained[rid] = p.PubRetained
-					// if sub_topic is not provided - **there will be NO** sub for this resource
-					if p.SubTopic != "" {
-						subTopicsRvsd[p.SubTopic] = rid
+						log.Printf("Ignoring MQTT protocol for %s device: Invalid method: %s", d.Name, method)
 					}
 				}
 			}
 		}
+
 	}
 
 	if !requiresMqtt {
@@ -80,7 +82,7 @@ func newMQTTConnector(conf *Config, dataReqCh chan<- DataRequest) *MQTTConnector
 		subCh:                  dataReqCh,
 		pubTopics:              pubTopics,
 		pubRetained:            pubRetained,
-		subTopicsRvsd:          subTopicsRvsd,
+		subTopicsRvsd:          subTopics,
 		serviceCatalogEndpoint: conf.ServiceCatalog.Endpoint,
 		discoveryCh:            make(chan string),
 	}
@@ -103,7 +105,7 @@ func (c *MQTTConnector) start() {
 	c.configureMqttConnection()
 
 	// start the connection routine
-	logger.Printf("MQTTConnector.start() Will connect to the broker %v\n", c.config.URL)
+	logger.Printf("MQTTConnector.start() Will connect to the broker %v\n", c.config.URI)
 	go c.connect(0)
 
 	// start the publisher routine
@@ -239,7 +241,7 @@ func (c *MQTTConnector) discoverBrokerEndpoint() {
 	// make the scheme compatible to Paho
 	uri = strings.Replace(uri, "mqtt://", "tcp://", 1)
 	uri = strings.Replace(uri, "mqtts://", "ssl://", 1)
-	c.config.URL = uri
+	c.config.URI = uri
 
 	err := c.config.Validate()
 	if err != nil {
@@ -265,7 +267,7 @@ func (c *MQTTConnector) connect(backOff time.Duration) {
 		return
 	}
 	for {
-		logger.Printf("MQTTConnector.connect() connecting to the broker %v, backOff: %v\n", c.config.URL, backOff)
+		logger.Printf("MQTTConnector.connect() connecting to the broker %v, backOff: %v\n", c.config.URI, backOff)
 		time.Sleep(backOff)
 		if c.client.IsConnected() {
 			break
@@ -288,7 +290,7 @@ func (c *MQTTConnector) connect(backOff time.Duration) {
 }
 
 func (c *MQTTConnector) onConnected(client paho.Client) {
-	logger.Printf("MQTTPulbisher.onConnected() connected to the broker %v", c.config.URL)
+	logger.Printf("MQTTPulbisher.onConnected() connected to the broker %v", c.config.URI)
 
 	// subscribe if there is at least one resource with SUB in paho protocol is configured
 	if len(c.subTopicsRvsd) > 0 {
@@ -338,7 +340,7 @@ func (c *MQTTConnector) onConnectionLost(client paho.Client, reason error) {
 
 func (c *MQTTConnector) configureMqttConnection() {
 	connOpts := paho.NewClientOptions().
-		AddBroker(c.config.URL).
+		AddBroker(c.config.URI).
 		SetClientID(c.clientID).
 		SetCleanSession(true).
 		SetConnectionLostHandler(c.onConnectionLost).
@@ -352,7 +354,7 @@ func (c *MQTTConnector) configureMqttConnection() {
 	}
 
 	// SSL/TLS
-	if strings.HasPrefix(c.config.URL, "ssl") {
+	if strings.HasPrefix(c.config.URI, "ssl") {
 		tlsConfig := &tls.Config{}
 		// Custom CA to auth broker with a self-signed certificate
 		if c.config.CaFile != "" {

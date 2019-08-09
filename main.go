@@ -80,12 +80,11 @@ func main() {
 	// Register this gateway as a service via DNS-SD
 	var bonjourS *bonjour.Server
 	if config.DnssdEnabled {
-		restConfig, _ := config.Protocols[ProtocolTypeREST].(RestProtocol)
 		bonjourS, err = bonjour.Register(config.Description,
 			DNSSDServiceTypeDGW,
 			"",
-			config.Http.BindPort,
-			[]string{fmt.Sprintf("uri=%s", restConfig.Location)},
+			config.Protocols.HTTP.BindPort,
+			[]string{},
 			nil)
 		if err != nil {
 			logger.Printf("Failed to register DNS-SD service: %s", err.Error())
