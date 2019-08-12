@@ -17,11 +17,8 @@ const (
 	HTTPProtocolType = "HTTP"
 
 	// MQTT
-	MQTTProtocolType               = "MQTT"
-	MQTTDefaultQoS            byte = 1
-	MQTTMaxReconnectInterval       = 60 * time.Second
-	MQTTMaxRediscoverInterval      = 60 * time.Second
-	MQTTPublishTimeoutEnvKey       = "DGW_PUBLISH_TIMEOUT"
-	MQTTPubMethod                  = "PUB"
-	MQTTSubMethod                  = "SUB"
+	MQTTProtocolType          = "MQTT"
+	MQTTMaxReconnectInterval  = 60 * time.Second
+	MQTTMaxRediscoverInterval = 60 * time.Second
+	MQTTPublishTimeoutEnvKey  = "DGW_PUBLISH_TIMEOUT"
 )
