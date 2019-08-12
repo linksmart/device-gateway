@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -121,10 +122,11 @@ func reviseConfig(config *Config) *Config {
 	for di := range config.devices {
 		logger.Printf("Device name: %s", config.devices[di].Name)
 		for pi := range config.devices[di].Protocols {
+			config.devices[di].Protocols[pi].Type = strings.ToUpper(config.devices[di].Protocols[pi].Type)
 			switch config.devices[di].Protocols[pi].Type {
 			case HTTPProtocolType:
-				if config.devices[di].Protocols[pi].HTTP == nil {
-					config.devices[di].Protocols[pi].HTTP = &HTTP{}
+				for hi := range config.devices[di].Protocols[pi].HTTP.Methods {
+					config.devices[di].Protocols[pi].HTTP.Methods[hi] = strings.ToUpper(config.devices[di].Protocols[pi].HTTP.Methods[hi])
 				}
 				if config.devices[di].Protocols[pi].HTTP.Path == "" {
 					path := "/" + config.devices[di].Name
@@ -132,19 +134,6 @@ func reviseConfig(config *Config) *Config {
 					logger.Printf("Protocols[%d]: HTTP path not set. Used /<device-name>: %s", pi, path)
 				}
 			case MQTTProtocolType:
-				if config.devices[di].Protocols[pi].MQTT == nil {
-					config.devices[di].Protocols[pi].MQTT = &MQTT{}
-				}
-				if config.devices[di].Protocols[pi].MQTT.Topic == "" {
-					topic := config.Id + "/" + config.devices[di].Name
-					config.devices[di].Protocols[pi].MQTT.Topic = topic
-					logger.Printf("Protocols[%d]: MQTT topic not set. Used <dgw-id>/<device-name>: %s", pi, topic)
-				}
-				if config.devices[di].Protocols[pi].MQTT.QoS == nil {
-					def := MQTTDefaultQoS
-					config.devices[di].Protocols[pi].MQTT.QoS = &def
-					logger.Printf("Protocols[%d]: MQTT QoS not set. Used default: %d", pi, def)
-				}
 				if config.devices[di].Protocols[pi].MQTT.Client == nil {
 					config.devices[di].Protocols[pi].MQTT.Client = &config.Protocols.MQTT
 					logger.Printf("Protocols[%d]: MQTT QoS not set. Used global client: %s", pi, config.Protocols.MQTT.URI)
@@ -211,6 +200,7 @@ type MqttProtocolConfig struct {
 }
 
 func (p *MqttProtocolConfig) Validate() error {
+
 	if !p.Discover {
 		parsedURL, err := url.Parse(p.URI)
 		if err != nil {
@@ -259,16 +249,22 @@ func (d *Device) validate() error {
 	if strings.HasPrefix(d.Name, "/") || strings.HasSuffix(d.Name, "/") {
 		return fmt.Errorf("name should not start or end with slash: %s", d.Name)
 	}
-	for _, protocol := range d.Protocols {
+	for i := range d.Protocols {
 
-		switch strings.ToUpper(protocol.Type) {
+		switch strings.ToUpper(d.Protocols[i].Type) {
 		case MQTTProtocolType:
-			mqtt := protocol.MQTT
-			if len(protocol.Methods) == 0 {
-				return fmt.Errorf("MQTT methods not set")
+			mqtt := d.Protocols[i].MQTT
+			if mqtt.PubTopic == "" && mqtt.SubTopic == "" {
+				return fmt.Errorf("MQTT pubTopic and subTopic are both empty")
 			}
-			if mqtt.QoS != nil && *mqtt.QoS > 2 {
-				return fmt.Errorf("MQTT QoS should be [0-2], not %d", mqtt.QoS)
+			if mqtt.PubTopic != "" && mqtt.SubTopic != "" && mqtt.PubTopic == mqtt.SubTopic {
+				return fmt.Errorf("MQTT pubTopic and subTopic must not be equal")
+			}
+			if mqtt.PubQoS > 2 {
+				return fmt.Errorf("MQTT pubQoS should be [0-2], not %d", mqtt.PubQoS)
+			}
+			if mqtt.SubQoS > 2 {
+				return fmt.Errorf("MQTT subQoS should be [0-2], not %d", mqtt.SubQoS)
 			}
 			if mqtt.Client != nil {
 				err := mqtt.Client.Validate()
@@ -277,32 +273,42 @@ func (d *Device) validate() error {
 				}
 			}
 		case HTTPProtocolType:
-			if len(protocol.Methods) == 0 {
+			httpP := d.Protocols[i].HTTP
+
+			if len(httpP.Methods) == 0 {
 				return fmt.Errorf("HTTP methods not set")
 			}
+			for _, method := range httpP.Methods {
+				if strings.ToUpper(method) != http.MethodGet && strings.ToUpper(method) != http.MethodPut {
+					return fmt.Errorf("HTTP methods should be GET or PUT, not %s", method)
+				}
+			}
+
 		default:
-			return fmt.Errorf("unknown protocol: %T", protocol.Type)
+			return fmt.Errorf("unknown protocol: %s", d.Protocols[i].Type)
 		}
 	}
 	return nil
 }
 
 type DeviceProtocolConfig struct {
-	Type    string
-	Methods []string `json:"methods"`
+	Type string
 	*MQTT
 	*HTTP
 }
 
 type MQTT struct {
-	Topic    string              `json:"topic"`
-	Retained bool                `json:"retained"`
-	QoS      *uint8              `json:"qos"`
-	Client   *MqttProtocolConfig `json:"client"` // overrides default
+	PubTopic    string              `json:"pubTopic"`
+	PubRetained bool                `json:"pubRetained"` // default = false
+	PubQoS      uint8               `json:"pubQoS"`      // default = 0
+	SubTopic    string              `json:"subTopic"`
+	SubQoS      uint8               `json:"subQoS"` // default = 0
+	Client      *MqttProtocolConfig `json:"client"` // overrides default
 }
 
 type HTTP struct {
-	Path string `json:"path"`
+	Methods []string `json:"methods"`
+	Path    string   `json:"path"`
 }
 
 func (d *Device) DeviceName(name string) string {

@@ -7,7 +7,6 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"strings"
 	"time"
 
@@ -19,69 +18,68 @@ import (
 
 // MQTTConnector provides paho protocol connectivity
 type MQTTConnector struct {
-	config                 *MqttProtocolConfig
-	clientID               string
-	client                 paho.Client
-	pubCh                  chan AgentResponse
-	offlineBufferCh        chan AgentResponse
-	subCh                  chan<- DataRequest
-	pubTopics              map[string]string
-	pubRetained            map[string]bool
-	subTopicsRvsd          map[string]string // store SUB topics "reversed" to optimize lookup in messageHandler
+	config          *MqttProtocolConfig
+	clientID        string
+	client          paho.Client
+	pubCh           chan AgentResponse
+	offlineBufferCh chan AgentResponse
+	subCh           chan<- DataRequest
+	publishers      map[string]*publisher
+	subscribers     map[string]*subscriber // inverse index for lookup in messageHandler
 	serviceCatalogEndpoint string
 	discoveryCh            chan string
+}
+
+type publisher struct {
+	topic    string
+	qos      byte
+	retained bool
+}
+
+type subscriber struct {
+	id  string
+	qos byte
 }
 
 var WaitTimeout time.Duration = 0 // overriden by environment variable
 
 func newMQTTConnector(conf *Config, dataReqCh chan<- DataRequest) *MQTTConnector {
-	// Check if we need to publish to paho
-	config := conf.Protocols.MQTT
 
-	// check whether paho is required at all and set pub/sub topics for each resource
-	pubTopics := make(map[string]string)
-	pubRetained := make(map[string]bool)
-	subTopics := make(map[string]string)
+	// Create and return connector
+	c := &MQTTConnector{
+		config:          &conf.Protocols.MQTT,
+		clientID:        fmt.Sprintf("DGW-%s", conf.Id),
+		pubCh:           make(chan AgentResponse, 100), // buffer to compensate for pub latencies
+		offlineBufferCh: make(chan AgentResponse, conf.Protocols.MQTT.OfflineBuffer),
+		subCh:           dataReqCh,
+		publishers:      make(map[string]*publisher),
+		subscribers:     make(map[string]*subscriber),
+		serviceCatalogEndpoint: conf.ServiceCatalog.Endpoint,
+		discoveryCh:            make(chan string),
+	}
+
 	requiresMqtt := false
 	for _, d := range conf.devices {
 
-		for _, protocol := range d.Protocols {
-			if strings.ToUpper(protocol.Type) == MQTTProtocolType {
+		for i := range d.Protocols {
+			if d.Protocols[i].Type == MQTTProtocolType {
+				mqtt := d.Protocols[i].MQTT
 				requiresMqtt = true
-				for _, method := range protocol.Methods {
-					if strings.ToUpper(method) == MQTTPubMethod {
-						pubTopics[d.Name] = protocol.Topic
-						pubRetained[d.Name] = protocol.Retained
-					} else if strings.ToUpper(method) == MQTTSubMethod {
-						subTopics[d.Name] = protocol.Topic
-					} else {
-						log.Printf("Ignoring MQTT protocol for %s device: Invalid method: %s", d.Name, method)
-					}
+
+				if mqtt.PubTopic != "" {
+					c.publishers[d.Name] = &publisher{mqtt.PubTopic, mqtt.PubQoS, mqtt.PubRetained}
+				}
+				if mqtt.SubTopic != "" {
+					c.subscribers[mqtt.SubTopic] = &subscriber{d.Name, mqtt.SubQoS}
 				}
 			}
 		}
-
 	}
 
 	if !requiresMqtt {
 		return nil
 	}
-
-	// Create and return connector
-	connector := &MQTTConnector{
-		config:                 &config,
-		clientID:               fmt.Sprintf("DGW-%s", conf.Id),
-		pubCh:                  make(chan AgentResponse, 100), // buffer to compensate for pub latencies
-		offlineBufferCh:        make(chan AgentResponse, config.OfflineBuffer),
-		subCh:                  dataReqCh,
-		pubTopics:              pubTopics,
-		pubRetained:            pubRetained,
-		subTopicsRvsd:          subTopics,
-		serviceCatalogEndpoint: conf.ServiceCatalog.Endpoint,
-		discoveryCh:            make(chan string),
-	}
-
-	return connector
+	return c
 }
 
 func (c *MQTTConnector) dataInbox() chan<- AgentResponse {
@@ -127,9 +125,9 @@ func (c *MQTTConnector) publisher() {
 			logger.Println("MQTTConnector.publisher() data ERROR from agent manager:", string(resp.Payload))
 			continue
 		}
-		topic := c.pubTopics[resp.ResourceId]
+		topic := c.publishers[resp.ResourceId].topic
 
-		token := c.client.Publish(topic, byte(MQTTDefaultQoS), c.pubRetained[resp.ResourceId], resp.Payload)
+		token := c.client.Publish(topic, c.publishers[resp.ResourceId].qos, c.publishers[resp.ResourceId].retained, resp.Payload)
 		if WaitTimeout > 0 {
 			if done := token.WaitTimeout(WaitTimeout); done && token.Error() != nil {
 				logger.Printf("MQTTConnector.publisher() error publishing: %s", token.Error())
@@ -147,7 +145,7 @@ func (c *MQTTConnector) publisher() {
 func (c *MQTTConnector) messageHandler(client paho.Client, msg paho.Message) {
 	logger.Printf("MQTTConnector.messageHandler() message received: topic: %v payload: %v\n", msg.Topic(), msg.Payload())
 
-	rid, ok := c.subTopicsRvsd[msg.Topic()]
+	subscriber, ok := c.subscribers[msg.Topic()]
 	if !ok {
 		logger.Println("MQTTConnector.messageHandler() the received message doesn't match any resource's configuration **discarded**")
 		return
@@ -155,7 +153,7 @@ func (c *MQTTConnector) messageHandler(client paho.Client, msg paho.Message) {
 
 	// Send Data Request
 	dr := DataRequest{
-		ResourceId: rid,
+		ResourceId: subscriber.id,
 		Type:       DataRequestTypeWrite,
 		Arguments:  msg.Payload(),
 		Reply:      nil, // there will be **no reply** on the request/command execution
@@ -287,13 +285,13 @@ func (c *MQTTConnector) onConnected(client paho.Client) {
 	logger.Printf("MQTTPulbisher.onConnected() connected to the broker %v", c.config.URI)
 
 	// subscribe if there is at least one resource with SUB in paho protocol is configured
-	if len(c.subTopicsRvsd) > 0 {
+	if len(c.subscribers) > 0 {
 		logger.Println("MQTTPulbisher.onConnected() will (re-)subscribe to all configured SUB topics")
 
 		topicFilters := make(map[string]byte)
-		for topic, _ := range c.subTopicsRvsd {
+		for topic, sub := range c.subscribers {
 			logger.Printf("MQTTPulbisher.onConnected() will subscribe to topic %s", topic)
-			topicFilters[topic] = MQTTDefaultQoS
+			topicFilters[topic] = sub.qos
 		}
 		client.SubscribeMultiple(topicFilters, c.messageHandler)
 	} else {
@@ -308,9 +306,9 @@ func (c *MQTTConnector) onConnected(client paho.Client) {
 			logger.Println("MQTTConnector.onConnected() data ERROR from agent manager:", string(resp.Payload))
 			continue
 		}
-		topic := c.pubTopics[resp.ResourceId]
+		topic := c.publishers[resp.ResourceId].topic
 
-		token := c.client.Publish(topic, byte(MQTTDefaultQoS), c.pubRetained[resp.ResourceId], resp.Payload)
+		token := c.client.Publish(topic, c.publishers[resp.ResourceId].qos, c.publishers[resp.ResourceId].retained, resp.Payload)
 		if WaitTimeout > 0 {
 			if published := token.WaitTimeout(WaitTimeout); token.Error() != nil {
 				logger.Printf("MQTTConnector.onConnected() error publishing: %s", token.Error())
