@@ -18,7 +18,7 @@ type MQTTConnector struct {
 	pubCh                  chan AgentResponse
 	subCh                  chan<- DataRequest
 	serviceCatalogEndpoint string
-	deviceClients          map[string][]mqttClient
+	deviceClients          map[string][]*mqttClient
 	//discoveryCh            chan string
 }
 
@@ -48,7 +48,7 @@ var WaitTimeout time.Duration = 0 // overriden by environment variable
 
 func newMQTTConnector(conf *Config, dataReqCh chan<- DataRequest) (*MQTTConnector, error) {
 
-	deviceClients := make(map[string][]mqttClient)
+	deviceClients := make(map[string][]*mqttClient)
 	for di, d := range conf.devices {
 		for pi := range d.Protocols {
 			if d.Protocols[pi].Type == MQTTProtocolType {
@@ -74,7 +74,7 @@ func newMQTTConnector(conf *Config, dataReqCh chan<- DataRequest) (*MQTTConnecto
 				}
 				client.paho = paho.NewClient(options)
 
-				deviceClients[d.Name] = append(deviceClients[d.Name], client)
+				deviceClients[d.Name] = append(deviceClients[d.Name], &client)
 			}
 		}
 	}
@@ -105,9 +105,8 @@ func (c *MQTTConnector) start() {
 	//}
 
 	for i := range c.deviceClients {
-		for _, client := range c.deviceClients[i] {
-			logger.Printf("MQTTConnector.start() Will connect to the broker %v\n", client.config.URI)
-			go client.connect(0)
+		for j := range c.deviceClients[i] {
+			go c.deviceClients[i][j].connect(0)
 		}
 	}
 
