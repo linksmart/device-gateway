@@ -113,14 +113,14 @@ func (c *Config) Validate() error {
 }
 
 func reviseConfig(config *Config) *Config {
+	logger.Printf("Revising configurations:")
+
 	if config.Id == "" {
 		config.Id = uuid.NewV4().String()
-		logger.Printf("Generated random service ID: %s", config.Id)
+		logger.Printf("├─ ID not set. Generated randomly: %s", config.Id)
 	}
 
-	logger.Printf("Revising device configurations:")
 	for di := range config.devices {
-		logger.Printf("Device name: %s", config.devices[di].Name)
 		for pi := range config.devices[di].Protocols {
 			config.devices[di].Protocols[pi].Type = strings.ToUpper(config.devices[di].Protocols[pi].Type)
 			switch config.devices[di].Protocols[pi].Type {
@@ -131,12 +131,13 @@ func reviseConfig(config *Config) *Config {
 				if config.devices[di].Protocols[pi].HTTP.Path == "" {
 					path := "/" + config.devices[di].Name
 					config.devices[di].Protocols[pi].HTTP.Path = path
-					logger.Printf("Protocols[%d]: HTTP path not set. Used /<device-name>: %s", pi, path)
+					logger.Printf("├─ %s.protocols[%d]: HTTP path not set. Used /<device-name>: %s", config.devices[di].Name, pi, path)
 				}
 			case MQTTProtocolType:
+				// TODO what if config.Protocols.MQTT is not given??
 				if config.devices[di].Protocols[pi].MQTT.Client == nil {
 					config.devices[di].Protocols[pi].MQTT.Client = &config.Protocols.MQTT
-					logger.Printf("Protocols[%d]: MQTT QoS not set. Used global client: %s", pi, config.Protocols.MQTT.URI)
+					logger.Printf("├─ %s.protocols[%d]: MQTT client not set. Used global client: %s", config.devices[di].Name, pi, config.Protocols.MQTT.URI)
 				}
 			}
 		}

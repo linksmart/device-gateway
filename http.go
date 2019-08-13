@@ -86,7 +86,7 @@ func (api *RESTfulAPI) start() {
 
 	// Start the listener
 	addr := fmt.Sprintf("%v:%v", api.httpConfig.BindAddr, api.httpConfig.BindPort)
-	logger.Printf("RESTfulAPI.start() Listenning on %v", addr)
+	logger.Printf("RESTfulAPI.start() Listening on %v", addr)
 	n.Run(addr)
 }
 
