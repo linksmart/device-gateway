@@ -5,7 +5,7 @@ go 1.12
 require (
 	github.com/codegangsta/negroni v0.2.0
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
-	github.com/eclipse/paho.mqtt.golang v1.1.0
+	github.com/eclipse/paho.mqtt.golang v1.2.0
 	github.com/farshidtz/elog v0.9.0
 	github.com/gorilla/context v1.1.1
 	github.com/gorilla/mux v1.5.0

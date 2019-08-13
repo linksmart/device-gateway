@@ -47,10 +47,14 @@ func main() {
 
 	// Configure MQTT if required
 	discoveryCh := make(chan string)
-	mqttConnector := newMQTTConnector(config, agentManager.DataRequestInbox())
+	mqttConnector, err := newMQTTConnector(config, agentManager.DataRequestInbox())
+	if err != nil {
+		logger.Printf("Failed to create mqtt connector: %s", err)
+		os.Exit(1)
+	}
 	if mqttConnector != nil {
 		agentManager.setPublishingChannel(mqttConnector.dataInbox())
-		discoveryCh = mqttConnector.discoveryCh
+		//discoveryCh = mqttConnector.discoveryCh
 		go mqttConnector.start()
 	}
 
