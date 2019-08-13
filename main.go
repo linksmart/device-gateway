@@ -102,7 +102,7 @@ func main() {
 		syscall.SIGQUIT)
 	for sig := range handler {
 		if sig == os.Interrupt {
-			logger.Println("Caught interrupt signal...")
+			logger.Println("Caught interrupt signal.")
 			break
 		}
 	}
@@ -120,6 +120,7 @@ func main() {
 	}
 
 	// Unregister from Service Catalog
+	logger.Println("Unregister services...")
 	unregisterService()
 
 	logger.Println("Stopped")
