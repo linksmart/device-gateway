@@ -14,7 +14,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/linksmart/go-sec/auth/obtainer"
 	"github.com/linksmart/go-sec/authz"
+	sc "github.com/linksmart/service-catalog/catalog"
+	scClient "github.com/linksmart/service-catalog/client"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -109,40 +112,68 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	if c.ServiceCatalog.Endpoint != "" {
+		if c.ServiceCatalog.Auth != nil {
+			err := c.ServiceCatalog.Auth.Validate()
+			if err != nil {
+				return fmt.Errorf("invalid auth config for service catalog: %s", err)
+			}
+		}
+	}
+
 	return nil
 }
 
-func reviseConfig(config *Config) *Config {
+func (c *Config) revise() {
 	logger.Printf("Revising configurations:")
 
-	if config.Id == "" {
-		config.Id = uuid.NewV4().String()
-		logger.Printf("├─ ID not set. Generated randomly: %s", config.Id)
+	if c.Id == "" {
+		c.Id = uuid.NewV4().String()
+		logger.Printf("├─ ID not set. Generated randomly: %s", c.Id)
 	}
 
-	for di := range config.devices {
-		for pi := range config.devices[di].Protocols {
-			config.devices[di].Protocols[pi].Type = strings.ToUpper(config.devices[di].Protocols[pi].Type)
-			switch config.devices[di].Protocols[pi].Type {
+	for di := range c.devices {
+		for pi := range c.devices[di].Protocols {
+			c.devices[di].Protocols[pi].Type = strings.ToUpper(c.devices[di].Protocols[pi].Type)
+			switch c.devices[di].Protocols[pi].Type {
 			case HTTPProtocolType:
-				for hi := range config.devices[di].Protocols[pi].HTTP.Methods {
-					config.devices[di].Protocols[pi].HTTP.Methods[hi] = strings.ToUpper(config.devices[di].Protocols[pi].HTTP.Methods[hi])
+				for hi := range c.devices[di].Protocols[pi].HTTP.Methods {
+					c.devices[di].Protocols[pi].HTTP.Methods[hi] = strings.ToUpper(c.devices[di].Protocols[pi].HTTP.Methods[hi])
 				}
-				if config.devices[di].Protocols[pi].HTTP.Path == "" {
-					path := "/" + config.devices[di].Name
-					config.devices[di].Protocols[pi].HTTP.Path = path
-					logger.Printf("├─ %s.protocols[%d]: HTTP path not set. Used /<device-name>: %s", config.devices[di].Name, pi, path)
+				if c.devices[di].Protocols[pi].HTTP.Path == "" {
+					path := "/" + c.devices[di].Name
+					c.devices[di].Protocols[pi].HTTP.Path = path
+					logger.Printf("├─ %s.protocols[%d]: HTTP path not set. Used /<device-name>: %s", c.devices[di].Name, pi, path)
 				}
 			case MQTTProtocolType:
 				// TODO what if config.Protocols.MQTT is not given??
-				if config.devices[di].Protocols[pi].MQTT.Client == nil {
-					config.devices[di].Protocols[pi].MQTT.Client = &config.Protocols.MQTT
-					logger.Printf("├─ %s.protocols[%d]: MQTT client not set. Used global client: %s", config.devices[di].Name, pi, config.Protocols.MQTT.URI)
+				if c.devices[di].Protocols[pi].MQTT.Client == nil {
+					c.devices[di].Protocols[pi].MQTT.Client = &c.Protocols.MQTT
+					logger.Printf("├─ %s.protocols[%d]: MQTT client not set. Used global client: %s", c.devices[di].Name, pi, c.Protocols.MQTT.URI)
 				}
 			}
 		}
 	}
-	return config
+}
+
+func (c *Config) discoverEndpoints() error {
+	if c.ServiceCatalog.Endpoint == "" {
+		return fmt.Errorf("cannot discover without a service catalog")
+	}
+
+	for di := range c.devices {
+		for pi := range c.devices[di].Protocols {
+			if c.devices[di].Protocols[pi].Type == MQTTProtocolType && c.devices[di].Protocols[pi].Client.URI == "" {
+				endpoint, err := c.discoverBrokerEndpoint(c.devices[di].Protocols[pi].Client.Discover)
+				if err != nil {
+					return fmt.Errorf("error discovering broker endpoint: %s", err)
+				}
+				c.devices[di].Protocols[pi].Client.URI = endpoint
+			}
+		}
+	}
+
+	return nil
 }
 
 func (c *Config) getDevice(name string) (*Device, bool) {
@@ -189,8 +220,7 @@ func (h *HttpProtocolConfig) Validate() error {
 }
 
 type MqttProtocolConfig struct {
-	Discover      bool   `json:"discover"`
-	DiscoverID    string `json:"discoverID"`
+	Discover      string `json:"discover"`
 	URI           string `json:"uri"`
 	Username      string `json:"username"`
 	Password      string `json:"password"`
@@ -202,7 +232,7 @@ type MqttProtocolConfig struct {
 
 func (p *MqttProtocolConfig) Validate() error {
 
-	if !p.Discover {
+	if p.URI != "" {
 		parsedURL, err := url.Parse(p.URI)
 		if err != nil {
 			return fmt.Errorf("MQTT broker URI must be a valid URI in the format scheme://host:port")
@@ -210,6 +240,8 @@ func (p *MqttProtocolConfig) Validate() error {
 		if parsedURL.Scheme != "tcp" && parsedURL.Scheme != "ssl" {
 			return fmt.Errorf("MQTT broker URI scheme must be either 'tcp' or 'ssl'")
 		}
+	} else if p.URI == "" && p.Discover == "" {
+		return fmt.Errorf("MQTT broker URI not set. Discover not set")
 	}
 
 	// Check that the CA file exists
@@ -432,4 +464,69 @@ func (c ObtainerConf) Validate() error {
 	}
 
 	return nil
+}
+
+func (c *Config) discoverBrokerEndpoint(id string) (string, error) {
+
+	logger.Printf("Discovering endpoint for broker %s...", id)
+
+	backOffTime := 10 * time.Second
+	backOff := func() {
+		time.Sleep(backOffTime)
+		if backOffTime <= MQTTMaxRediscoverInterval {
+			backOffTime *= 2
+			if backOffTime > MQTTMaxRediscoverInterval {
+				backOffTime = MQTTMaxRediscoverInterval
+			}
+		}
+	}
+
+	var ticket *obtainer.Client
+	var err error
+	if c.ServiceCatalog.Auth != nil {
+		// Setup ticket client
+		ticket, err = obtainer.NewClient(c.ServiceCatalog.Auth.Provider, c.ServiceCatalog.Auth.ProviderURL, c.ServiceCatalog.Auth.Username, c.ServiceCatalog.Auth.Password, c.ServiceCatalog.Auth.ServiceID)
+		if err != nil {
+			return "", fmt.Errorf("error creating auth token obtainer for Service Catalog: %s", err)
+		}
+	}
+
+	for {
+		scc, err := scClient.NewHTTPClient(c.ServiceCatalog.Endpoint, ticket)
+		if err != nil {
+			return "", fmt.Errorf("error creating Service Catalog client: %s", err)
+		}
+
+		ok, err := scc.Ping()
+		if err != nil {
+			return "", fmt.Errorf("error pinging Service Catalog: %s", err)
+		}
+		if !ok {
+			logger.Printf("Could not reach Service Catalog. Will retry in %v", backOffTime)
+			backOff()
+			continue
+		}
+
+		service, err := scc.Get(id)
+		if err != nil {
+			switch err.(type) {
+			case *sc.NotFoundError:
+				return "", fmt.Errorf("broker %s was not found in Service Catalog", id)
+			default:
+				return "", fmt.Errorf("error searching for broker %s in Service Catalog: %s", id, err)
+			}
+
+		}
+		uri, found := service.APIs[sc.APITypeMQTT]
+		if !found {
+			return "", fmt.Errorf("unable to extract broker endpoint with key: %s", sc.APITypeMQTT)
+		}
+		logger.Printf("Discovered endpoint for %s: %s", id, uri)
+
+		// make the scheme compatible to Paho
+		uri = strings.Replace(uri, "mqtt://", "tcp://", 1)
+		uri = strings.Replace(uri, "mqtts://", "ssl://", 1)
+
+		return uri, nil
+	}
 }
