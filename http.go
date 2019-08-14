@@ -28,7 +28,7 @@ type errorResponse struct {
 // for device gateway
 type RESTfulAPI struct {
 	config         *Config
-	httpConfig     *HttpProtocolConfig // remove?
+	httpConfig     *HTTPProtocolConfig
 	router         *mux.Router
 	dataCh         chan<- DataRequest
 	commonHandlers alice.Chain

@@ -96,7 +96,7 @@ func (am *AgentManager) start() {
 		case ExecTypeService:
 			am.createService(d.Name, d.Agent)
 		default:
-			logger.Printf("AgentManager.start() ERROR: Unsupported execution type %s for resource %s\n", d.Agent.Type, d.Name)
+			logger.Panicf("AgentManager.start() ERROR: Unexpected execution type %s for resource %s\n", d.Agent.Type, d.Name)
 		}
 
 	}

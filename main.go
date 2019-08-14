@@ -37,13 +37,17 @@ func main() {
 
 	config, err := loadConfig(*confPath)
 	if err != nil {
-		logger.Printf("Failed to load configuration: %v\n", err)
+		logger.Printf("Failed to load configuration: %s", err)
+		os.Exit(1)
+	}
+	if err = config.validate(); err != nil {
+		logger.Printf("Invalid configuration: %s", err)
 		os.Exit(1)
 	}
 	config.revise()
 	err = config.discoverEndpoints()
 	if err != nil {
-		logger.Printf("Failed to discover endpoints: %v\n", err)
+		logger.Printf("Failed to discover endpoints: %s", err)
 		os.Exit(1)
 	}
 
