@@ -40,7 +40,12 @@ func main() {
 		logger.Printf("Failed to load configuration: %v\n", err)
 		os.Exit(1)
 	}
-	config = reviseConfig(config)
+	config.revise()
+	err = config.discoverEndpoints()
+	if err != nil {
+		logger.Printf("Failed to discover endpoints: %v\n", err)
+		os.Exit(1)
+	}
 
 	// Agents' process manager
 	agentManager := newAgentManager(config)

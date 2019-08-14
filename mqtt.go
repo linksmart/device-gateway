@@ -19,7 +19,6 @@ type MQTTConnector struct {
 	subCh                  chan<- DataRequest
 	serviceCatalogEndpoint string
 	deviceClients          map[string][]*mqttClient
-	//discoveryCh            chan string
 }
 
 type mqttClient struct {
@@ -100,11 +99,6 @@ func (c *MQTTConnector) dataInbox() chan<- AgentResponse {
 
 func (c *MQTTConnector) start() {
 	logger.Println("MQTTConnector.start()")
-
-	//if c.config.Discover {
-	//	c.discoverBrokerEndpoint()
-	//}
-
 	for i := range c.deviceClients {
 		for j := range c.deviceClients[i] {
 			go c.deviceClients[i][j].connect(0)
@@ -170,89 +164,6 @@ func (s *subscriber) messageHandler(_ paho.Client, msg paho.Message) {
 	// no response - blocking on waiting for one
 }
 
-//func (c *MQTTConnector) discoverBrokerEndpoint() {
-//	logger.Println("MQTTConnector.discoverBrokerEndpoint() discovering broker endpoint...")
-//
-//	backOffTime := 10 * time.Second
-//	backOff := func() {
-//		logger.Printf("MQTTConnector.discoverBrokerEndpoint() will retry in %v", backOffTime)
-//		time.Sleep(backOffTime)
-//		if backOffTime <= MQTTMaxRediscoverInterval {
-//			backOffTime *= 2
-//			if backOffTime > MQTTMaxRediscoverInterval {
-//				backOffTime = MQTTMaxRediscoverInterval
-//			}
-//		}
-//	}
-//
-//	var uri, id string
-//	for {
-//		if c.serviceCatalogEndpoint == "" {
-//			logger.Println("MQTTConnector.discoverBrokerEndpoint() discovering Service Catalog endpoint...")
-//			var err error
-//			c.serviceCatalogEndpoint, err = discovery.DiscoverCatalogEndpoint(sc.DNSSDServiceType)
-//			if err != nil {
-//				logger.Printf("MQTTConnector.discoverBrokerEndpoint() unable to discover Service Catalog: %s", err)
-//				backOff()
-//				continue
-//			}
-//		}
-//
-//		scc, err := scClient.NewHTTPClient(c.serviceCatalogEndpoint, nil)
-//		if err != nil {
-//			logger.Printf("MQTTConnector.discoverBrokerEndpoint() error creating Service Catalog client! Stopping discovery.")
-//			return
-//		}
-//
-//		// find the specified broker
-//		if c.config.DiscoverID != "" {
-//			service, err := scc.Get(c.config.DiscoverID)
-//			if err != nil {
-//				switch err.(type) {
-//				case *sc.NotFoundError:
-//					logger.Printf("MQTTConnector.discoverBrokerEndpoint() could not find broker: %s", c.config.DiscoverID)
-//				default:
-//					logger.Printf("MQTTConnector.discoverBrokerEndpoint() error searching for %s in Service Catalog: %s", c.config.DiscoverID, err)
-//				}
-//				backOff()
-//				continue
-//			}
-//			uri, id = service.APIs[sc.APITypeMQTT], service.ID
-//			break
-//		}
-//
-//		// find another broker, take first match
-//		res, _, err := scc.GetMany(1, 100, &scClient.FilterArgs{"name", "equals", DNSSDServiceTypeMQTT})
-//		if err != nil {
-//			logger.Printf("MQTTConnector.discoverBrokerEndpoint() error searching for broker in Service Catalog: %s", err)
-//			backOff()
-//			continue
-//		}
-//		if len(res) == 0 {
-//			logger.Printf("MQTTConnector.discoverBrokerEndpoint() no brokers could be discovered from Service Catalog.")
-//			backOff()
-//			continue
-//		}
-//		uri, id = res[0].APIs[sc.APITypeMQTT], res[0].ID
-//		break
-//	}
-//
-//	// make the scheme compatible to Paho
-//	uri = strings.Replace(uri, "mqtt://", "tcp://", 1)
-//	uri = strings.Replace(uri, "mqtts://", "ssl://", 1)
-//	c.config.URI = uri
-//
-//	err := c.config.Validate()
-//	if err != nil {
-//		logger.Printf("MQTTConnector.discoverBrokerEndpoint() error validating broker configuration: %s", err)
-//		return
-//	}
-//
-//	logger.Printf("MQTTConnector.discoverBrokerEndpoint() discovered broker %s with endpoint: %s", id, uri)
-//	//c.discoveryCh <- uri
-//	return
-//}
-
 func (c *MQTTConnector) stop() {
 	logger.Println("MQTTConnector.stop()")
 	for i := range c.deviceClients {
@@ -299,14 +210,6 @@ func (client *mqttClient) onConnected(_ paho.Client) {
 	if client.subscriber.topic != "" {
 		logger.Printf("MQTTConnector.onConnected() %s: will subscribe to %s", client.uri, client.subscriber.topic)
 		client.paho.Subscribe(client.subscriber.topic, client.subscriber.qos, client.subscriber.messageHandler)
-
-		//logger.Println("MQTTPulbisher.onConnected() will (re-)subscribe to all configured SUB topics")
-		//topicFilters := make(map[string]byte)
-		//for topic, sub := range c.subscribers {
-		//	logger.Printf("MQTTPulbisher.onConnected() will subscribe to topic %s", topic)
-		//	topicFilters[topic] = sub.qos
-		//}
-		//client.SubscribeMultiple(topicFilters, c.messageHandler)
 	} else {
 		logger.Printf("MQTTConnector.onConnected() %s: no subscriptions.", client.uri)
 	}

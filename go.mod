@@ -11,7 +11,7 @@ require (
 	github.com/gorilla/mux v1.5.0
 	github.com/justinas/alice v0.0.0-20160512134231-052b8b6c18ed
 	github.com/linksmart/go-sec v1.0.1
-	github.com/linksmart/service-catalog v0.0.0-20190807153650-e0219d877571
+	github.com/linksmart/service-catalog v0.0.0-20190814153706-1a461aa86472 // indirect
 	github.com/oleksandr/bonjour v0.0.0-20160508152359-5dcf00d8b228
 	github.com/onsi/ginkgo v1.8.0 // indirect
 	github.com/onsi/gomega v1.5.0 // indirect

@@ -34,8 +34,8 @@ github.com/kelseyhightower/envconfig v1.3.0 h1:IvRS4f2VcIQy6j4ORGIf9145T/AsUB+oY
 github.com/kelseyhightower/envconfig v1.3.0/go.mod h1:cccZRl6mQpaq41TPp5QxidR+Sa3axMbJDNb//FQX6Gg=
 github.com/linksmart/go-sec v1.0.1 h1:UNeRj81/KHCy4hkFcZn7x5N/nM+uNxe+xsLBQzNF7kg=
 github.com/linksmart/go-sec v1.0.1/go.mod h1:bTksBzP6fCEwIM43z8m3jSRa4YIAWdUwMBYjcoftm1c=
-github.com/linksmart/service-catalog v0.0.0-20190807153650-e0219d877571 h1:YsV11RRKV4WhbqkUpXVX/X1NgGdULbNJV0xZfOOsSgU=
-github.com/linksmart/service-catalog v0.0.0-20190807153650-e0219d877571/go.mod h1:3Tc0uFAMi0M6DOEBr4kAbzwWDuj3PaYzxYXWcdodW/s=
+github.com/linksmart/service-catalog v0.0.0-20190814153706-1a461aa86472 h1:VnCXEGEkOg2rohVUqo4dGHrsgNJO8cHJ+cpZqR01eeQ=
+github.com/linksmart/service-catalog v0.0.0-20190814153706-1a461aa86472/go.mod h1:3Tc0uFAMi0M6DOEBr4kAbzwWDuj3PaYzxYXWcdodW/s=
 github.com/miekg/dns v0.0.0-20170818131442-e4205768578d h1:M1nGptTlM6l6aT5MUYA5XExwSjnIPHA+xEOWobbMU6g=
 github.com/miekg/dns v0.0.0-20170818131442-e4205768578d/go.mod h1:W1PPwlIAgtquWBMBEV9nkV9Cazfe8ScdGz/Lj7v3Nrg=
 github.com/oleksandr/bonjour v0.0.0-20160508152359-5dcf00d8b228 h1:Cvfd2dOlXIPTeEkOT/h8PyK4phBngOM4at9/jlgy7d4=
