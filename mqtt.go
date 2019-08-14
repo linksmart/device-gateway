@@ -23,7 +23,8 @@ type MQTTConnector struct {
 }
 
 type mqttClient struct {
-	config          *MqttProtocolConfig
+	uri             string
+	clientID        string
 	paho            paho.Client
 	publisher       publisher
 	subscriber      subscriber
@@ -49,12 +50,13 @@ var WaitTimeout time.Duration = 0 // overriden by environment variable
 func newMQTTConnector(conf *Config, dataReqCh chan<- DataRequest) (*MQTTConnector, error) {
 
 	deviceClients := make(map[string][]*mqttClient)
-	for di, d := range conf.devices {
-		for pi := range d.Protocols {
-			if d.Protocols[pi].Type == MQTTProtocolType {
-				mqtt := d.Protocols[pi].MQTT
+	for di := range conf.devices {
+		for pi := range conf.devices[di].Protocols {
+			if conf.devices[di].Protocols[pi].Type == MQTTProtocolType {
+				mqtt := conf.devices[di].Protocols[pi].MQTT
 				var client mqttClient
-				client.config = mqtt.Client
+				client.uri = mqtt.Client.URI
+				client.clientID = fmt.Sprintf("dgw-%s-%d-%d", conf.Id, di, pi)
 				if mqtt.PubTopic != "" {
 					client.publisher.topic = mqtt.PubTopic
 					client.publisher.qos = mqtt.PubQoS
@@ -64,17 +66,16 @@ func newMQTTConnector(conf *Config, dataReqCh chan<- DataRequest) (*MQTTConnecto
 					client.subscriber.topic = mqtt.SubTopic
 					client.subscriber.qos = mqtt.SubQoS
 					client.subscriber.subCh = dataReqCh
-					client.subscriber.deviceName = d.Name
+					client.subscriber.deviceName = conf.devices[di].Name
 				}
 				client.offlineBufferCh = make(chan AgentResponse, mqtt.Client.OfflineBuffer)
 
-				options, err := client.pahoOptions(fmt.Sprintf("%s-%d-%d", conf.Id, di, pi))
+				err := client.configure(mqtt.Client)
 				if err != nil {
 					return nil, fmt.Errorf("error creating paho client options: %s", err)
 				}
-				client.paho = paho.NewClient(options)
 
-				deviceClients[d.Name] = append(deviceClients[d.Name], &client)
+				deviceClients[conf.devices[di].Name] = append(deviceClients[conf.devices[di].Name], &client)
 			}
 		}
 	}
@@ -122,19 +123,19 @@ func (c *MQTTConnector) publisher() {
 			if !client.paho.IsConnected() {
 				bufferCap := cap(client.offlineBufferCh)
 				if bufferCap == 0 {
-					logger.Printf("MQTTConnector.publisher() %s: discarded data while not connected.", client.config.URI)
+					logger.Printf("MQTTConnector.publisher() %s: discarded data while not connected.", client.uri)
 					continue
 				}
 				select {
 				case client.offlineBufferCh <- resp:
-					logger.Printf("MQTTConnector.publisher() %s: buffered while not connected (%d/%d)", client.config.URI, len(client.offlineBufferCh), bufferCap)
+					logger.Printf("MQTTConnector.publisher() %s: buffered while not connected (%d/%d)", client.uri, len(client.offlineBufferCh), bufferCap)
 				default:
-					logger.Printf("MQTTConnector.publisher() %s: discarded data while not connected. Buffer is full (%d/%d)", client.config.URI, len(client.offlineBufferCh), bufferCap)
+					logger.Printf("MQTTConnector.publisher() %s: discarded data while not connected. Buffer is full (%d/%d)", client.uri, len(client.offlineBufferCh), bufferCap)
 				}
 				continue
 			}
 			if resp.IsError {
-				logger.Printf("MQTTConnector.publisher() %s: data ERROR from agent manager: %s", client.config.URI, resp.Payload)
+				logger.Printf("MQTTConnector.publisher() %s: data ERROR from agent manager: %s", client.uri, resp.Payload)
 				continue
 			}
 
@@ -148,13 +149,13 @@ func (c *MQTTConnector) publisher() {
 					continue
 				}
 			}
-			logger.Printf("MQTTConnector.publisher() %s: published to %s", client.config.URI, client.publisher.topic)
+			logger.Printf("MQTTConnector.publisher() %s: published to %s", client.uri, client.publisher.topic)
 		}
 	}
 }
 
 // processes incoming messages from the broker and writes DataRequets to the subCh
-func (s *subscriber) messageHandler(client paho.Client, msg paho.Message) {
+func (s *subscriber) messageHandler(_ paho.Client, msg paho.Message) {
 	logger.Printf("MQTTConnector.messageHandler() message received: topic: %v payload: %v\n", msg.Topic(), msg.Payload())
 
 	// Send Data Request
@@ -263,23 +264,23 @@ func (c *MQTTConnector) stop() {
 	}
 }
 
-func (c *mqttClient) connect(backOff time.Duration) {
+func (client *mqttClient) connect(backOff time.Duration) {
 	for {
 		var backOffMessage string
 		if backOff != 0 {
 			backOffMessage = fmt.Sprintf(" backOff %v", backOff)
 		}
-		logger.Printf("MQTTConnector.connect() %s: connecting...%s", c.config.URI, backOffMessage)
+		logger.Printf("MQTTConnector.connect() %s: connecting as %s%s", client.uri, client.clientID, backOffMessage)
 		time.Sleep(backOff)
-		if c.paho.IsConnected() {
+		if client.paho.IsConnected() {
 			break
 		}
-		token := c.paho.Connect()
+		token := client.paho.Connect()
 		token.Wait()
 		if token.Error() == nil {
 			break
 		}
-		logger.Printf("MQTTConnector.connect() %s: failed to connect: %v", c.config.URI, token.Error().Error())
+		logger.Printf("MQTTConnector.connect() %s: failed to connect: %v", client.uri, token.Error().Error())
 		if backOff == 0 {
 			backOff = 10 * time.Second
 		} else if backOff <= MQTTMaxReconnectInterval {
@@ -291,13 +292,13 @@ func (c *mqttClient) connect(backOff time.Duration) {
 	}
 }
 
-func (c *mqttClient) onConnected(client paho.Client) {
-	logger.Printf("MQTTConnector.onConnected() %s: connected.", c.config.URI)
+func (client *mqttClient) onConnected(_ paho.Client) {
+	logger.Printf("MQTTConnector.onConnected() %s: connected.", client.uri)
 
 	// subscribe topic is set
-	if c.subscriber.topic != "" {
-		logger.Printf("MQTTConnector.onConnected() %s: will subscribe to %s", c.config.URI, c.subscriber.topic)
-		client.Subscribe(c.subscriber.topic, c.subscriber.qos, c.subscriber.messageHandler)
+	if client.subscriber.topic != "" {
+		logger.Printf("MQTTConnector.onConnected() %s: will subscribe to %s", client.uri, client.subscriber.topic)
+		client.paho.Subscribe(client.subscriber.topic, client.subscriber.qos, client.subscriber.messageHandler)
 
 		//logger.Println("MQTTPulbisher.onConnected() will (re-)subscribe to all configured SUB topics")
 		//topicFilters := make(map[string]byte)
@@ -307,19 +308,20 @@ func (c *mqttClient) onConnected(client paho.Client) {
 		//}
 		//client.SubscribeMultiple(topicFilters, c.messageHandler)
 	} else {
-		logger.Printf("MQTTConnector.onConnected() %s: no subscriptions.", c.config.URI)
+		logger.Printf("MQTTConnector.onConnected() %s: no subscriptions.", client.uri)
 	}
 
 	// publish buffered messages to the broker
-	for len(c.offlineBufferCh) > 0 {
-		resp := <-c.offlineBufferCh
+	bufferCap := cap(client.offlineBufferCh)
+	for len(client.offlineBufferCh) > 0 {
+		resp := <-client.offlineBufferCh
 
 		if resp.IsError {
-			logger.Printf("MQTTConnector.onConnected() %s: data ERROR from agent manager: %s", c.config.URI, resp.Payload)
+			logger.Printf("MQTTConnector.onConnected() %s: data ERROR from agent manager: %s", client.uri, resp.Payload)
 			continue
 		}
 
-		token := c.paho.Publish(c.publisher.topic, c.publisher.qos, c.publisher.retained, resp.Payload)
+		token := client.paho.Publish(client.publisher.topic, client.publisher.qos, client.publisher.retained, resp.Payload)
 		if WaitTimeout > 0 {
 			if published := token.WaitTimeout(WaitTimeout); token.Error() != nil {
 				logger.Printf("MQTTConnector.onConnected() error publishing: %s", token.Error())
@@ -329,52 +331,51 @@ func (c *mqttClient) onConnected(client paho.Client) {
 				continue
 			}
 		}
-		logger.Printf("MQTTConnector.onConnected() published buffered message to %s (%d/%d)", c.publisher.topic, len(c.offlineBufferCh)+1, c.config.OfflineBuffer)
+		logger.Printf("MQTTConnector.onConnected() published buffered message to %s (%d/%d)", client.publisher.topic, len(client.offlineBufferCh)+1, bufferCap)
 	}
 }
 
-func (c *mqttClient) onConnectionLost(client paho.Client, reason error) {
-	logger.Printf("MQTTConnector.onConnectionLost() %s: %s", c.config.URI, reason.Error())
-
-	go c.connect(0)
+func (client *mqttClient) onConnectionLost(_ paho.Client, reason error) {
+	logger.Printf("MQTTConnector.onConnectionLost() %s: %s", client.uri, reason.Error())
+	go client.connect(0)
 }
 
-func (c *mqttClient) pahoOptions(clientID string) (*paho.ClientOptions, error) {
+func (client *mqttClient) configure(config *MqttProtocolConfig) error {
 	options := paho.NewClientOptions().
-		AddBroker(c.config.URI).
-		SetClientID(clientID).
+		AddBroker(config.URI).
+		SetClientID(client.clientID).
 		SetCleanSession(true).
-		SetConnectionLostHandler(c.onConnectionLost).
-		SetOnConnectHandler(c.onConnected).
+		SetConnectionLostHandler(client.onConnectionLost).
+		SetOnConnectHandler(client.onConnected).
 		SetAutoReconnect(false) // we take care of re-connect ourselves -> paho's MaxReconnectInterval has no effect
 
 	// Username/password authentication
-	if c.config.Username != "" {
-		options.SetUsername(c.config.Username)
-		options.SetPassword(c.config.Password)
+	if config.Username != "" {
+		options.SetUsername(config.Username)
+		options.SetPassword(config.Password)
 	}
 
 	// SSL/TLS
-	if strings.HasPrefix(c.config.URI, "ssl") {
+	if strings.HasPrefix(config.URI, "ssl") {
 		tlsConfig := &tls.Config{}
 		// Custom CA to auth broker with a self-signed certificate
-		if c.config.CaFile != "" {
-			caFile, err := ioutil.ReadFile(c.config.CaFile)
+		if config.CaFile != "" {
+			caFile, err := ioutil.ReadFile(config.CaFile)
 			if err != nil {
-				return nil, fmt.Errorf("error reading CA file %s: %s", c.config.CaFile, err)
+				return fmt.Errorf("error reading CA file %s: %s", config.CaFile, err)
 			} else {
 				tlsConfig.RootCAs = x509.NewCertPool()
 				ok := tlsConfig.RootCAs.AppendCertsFromPEM(caFile)
 				if !ok {
-					return nil, fmt.Errorf("error parsing CA certificate %s", c.config.CaFile)
+					return fmt.Errorf("error parsing CA certificate %s", config.CaFile)
 				}
 			}
 		}
 		// Certificate-based client authentication
-		if c.config.CertFile != "" && c.config.KeyFile != "" {
-			cert, err := tls.LoadX509KeyPair(c.config.CertFile, c.config.KeyFile)
+		if config.CertFile != "" && config.KeyFile != "" {
+			cert, err := tls.LoadX509KeyPair(config.CertFile, config.KeyFile)
 			if err != nil {
-				return nil, fmt.Errorf("error loading client TLS credentials: %s", err)
+				return fmt.Errorf("error loading client TLS credentials: %s", err)
 			} else {
 				tlsConfig.Certificates = []tls.Certificate{cert}
 			}
@@ -383,5 +384,6 @@ func (c *mqttClient) pahoOptions(clientID string) (*paho.ClientOptions, error) {
 		options.SetTLSConfig(tlsConfig)
 	}
 
-	return options, nil
+	client.paho = paho.NewClient(options)
+	return nil
 }
