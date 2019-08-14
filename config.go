@@ -22,8 +22,18 @@ import (
 )
 
 //
-// Loads a configuration form a given path
+// Main configuration struct
 //
+type Config struct {
+	ID             string             `json:"id"` // used as service id, as part of mqtt client id
+	Description    string             `json:"description"`
+	DnssdEnabled   bool               `json:"dnssdEnabled"`
+	Protocols      Protocols          `json:"protocols"`
+	ServiceCatalog ServiceCatalogConf `json:"serviceCatalog"`
+	devices        []Device
+}
+
+// Loads a configuration form a given path
 func loadConfig(confPath string) (*Config, error) {
 	file, err := ioutil.ReadFile(confPath)
 	if err != nil {
@@ -66,43 +76,17 @@ func loadConfig(confPath string) (*Config, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, err
-	}
-
-	if err = config.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error finding device files: %s", err)
 	}
 	return &config, nil
 }
 
-//
-// Main configuration struct
-//
-type Config struct {
-	Id             string             `json:"id"` // used as service id, mqtt client id,
-	Description    string             `json:"description"`
-	DnssdEnabled   bool               `json:"dnssdEnabled"`
-	Protocols      Protocols          `json:"protocols"`
-	ServiceCatalog ServiceCatalogConf `json:"serviceCatalog"`
-	devices        []Device
-}
-
-type Protocols struct {
-	HTTP HttpProtocolConfig `json:"HTTP"`
-	MQTT MqttProtocolConfig `json:"MQTT"`
-}
-
 // Validates the loaded configuration
-func (c *Config) Validate() error {
+func (c *Config) validate() error {
 
-	err := c.Protocols.HTTP.Validate()
+	err := c.Protocols.validate()
 	if err != nil {
-		return err
-	}
-
-	err = c.Protocols.MQTT.Validate()
-	if err != nil {
-		return err
+		return fmt.Errorf("protocols: %s", err)
 	}
 
 	for _, device := range c.devices {
@@ -112,24 +96,21 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if c.ServiceCatalog.Endpoint != "" {
-		if c.ServiceCatalog.Auth != nil {
-			err := c.ServiceCatalog.Auth.Validate()
-			if err != nil {
-				return fmt.Errorf("invalid auth config for service catalog: %s", err)
-			}
-		}
+	err = c.ServiceCatalog.validate()
+	if err != nil {
+		return fmt.Errorf("serviceCatalog: %s", err)
 	}
 
 	return nil
 }
 
+// Modifies the configuration for use by other modules
 func (c *Config) revise() {
 	logger.Printf("Revising configurations:")
 
-	if c.Id == "" {
-		c.Id = uuid.NewV4().String()
-		logger.Printf("├─ ID not set. Generated randomly: %s", c.Id)
+	if c.ID == "" {
+		c.ID = uuid.NewV4().String()
+		logger.Printf("├─ ID not set. Generated randomly: %s", c.ID)
 	}
 
 	for di := range c.devices {
@@ -146,7 +127,6 @@ func (c *Config) revise() {
 					logger.Printf("├─ %s.protocols[%d]: HTTP path not set. Used /<device-name>: %s", c.devices[di].Name, pi, path)
 				}
 			case MQTTProtocolType:
-				// TODO what if config.Protocols.MQTT is not given??
 				if c.devices[di].Protocols[pi].MQTT.Client == nil {
 					c.devices[di].Protocols[pi].MQTT.Client = &c.Protocols.MQTT
 					logger.Printf("├─ %s.protocols[%d]: MQTT client not set. Used global client: %s", c.devices[di].Name, pi, c.Protocols.MQTT.URI)
@@ -185,31 +165,48 @@ func (c *Config) getDevice(name string) (*Device, bool) {
 	return nil, false
 }
 
-//
-// Http config (for protocols using it)
-//
-type HttpProtocolConfig struct {
+type Protocols struct {
+	HTTP HTTPProtocolConfig `json:"HTTP"`
+	MQTT MQTTProtocolConfig `json:"MQTT"`
+}
+
+func (p *Protocols) validate() error {
+	err := p.HTTP.validate()
+	if err != nil {
+		return fmt.Errorf("HTTP: %s", err)
+	}
+
+	err = p.MQTT.validate()
+	if err != nil {
+		return fmt.Errorf("MQTT: %s", err)
+	}
+
+	return nil
+}
+
+type HTTPProtocolConfig struct {
 	PublicEndpoint string        `json:"publicEndpoint"`
 	BindAddr       string        `json:"bindAddr"`
 	BindPort       int           `json:"bindPort"`
 	Auth           ValidatorConf `json:"auth"`
 }
 
-func (h *HttpProtocolConfig) Validate() error {
-	if h.BindAddr == "" || h.BindPort == 0 {
-		return fmt.Errorf("HTTP bindAddr and bindPort not set")
+func (h *HTTPProtocolConfig) validate() error {
+	if h.BindAddr == "" {
+		return fmt.Errorf("bindAddr not set")
 	}
-	// Check if PublicEndpoint is valid
+	if h.BindPort == 0 {
+		return fmt.Errorf("bindPort not set")
+	}
 	if h.PublicEndpoint == "" {
-		return fmt.Errorf("HTTP publicEndpoint not set")
+		return fmt.Errorf("publicEndpoint not set")
 	}
 	_, err := url.Parse(h.PublicEndpoint)
 	if err != nil {
-		return fmt.Errorf("HTTP publicEndpoint not a valid URL")
+		return fmt.Errorf("publicEndpoint not a valid URL")
 	}
 
 	if h.Auth.Enabled {
-		// Validate ticket validator config
 		err = h.Auth.Validate()
 		if err != nil {
 			return err
@@ -219,7 +216,7 @@ func (h *HttpProtocolConfig) Validate() error {
 	return nil
 }
 
-type MqttProtocolConfig struct {
+type MQTTProtocolConfig struct {
 	Discover      string `json:"discover"`
 	URI           string `json:"uri"`
 	Username      string `json:"username"`
@@ -230,49 +227,45 @@ type MqttProtocolConfig struct {
 	OfflineBuffer uint   `json:"offlineBuffer"`
 }
 
-func (p *MqttProtocolConfig) Validate() error {
+func (p *MQTTProtocolConfig) validate() error {
 
 	if p.URI != "" {
 		parsedURL, err := url.Parse(p.URI)
 		if err != nil {
-			return fmt.Errorf("MQTT broker URI must be a valid URI in the format scheme://host:port")
+			return fmt.Errorf("invalid uri: %s", err)
 		}
 		if parsedURL.Scheme != "tcp" && parsedURL.Scheme != "ssl" {
-			return fmt.Errorf("MQTT broker URI scheme must be either 'tcp' or 'ssl'")
+			return fmt.Errorf("uri scheme must be either 'tcp' or 'ssl'")
 		}
 	} else if p.URI == "" && p.Discover == "" {
-		return fmt.Errorf("MQTT broker URI not set. Discover not set")
+		return fmt.Errorf("neither uri nor discover are set")
 	}
 
 	// Check that the CA file exists
 	if p.CaFile != "" {
 		if _, err := os.Stat(p.CaFile); os.IsNotExist(err) {
-			return fmt.Errorf("MQTT CA file %s does not exist", p.CaFile)
+			return fmt.Errorf("CA file %s does not exist", p.CaFile)
 		}
 	}
 
 	// Check that the client certificate and key files exist
 	if p.CertFile != "" || p.KeyFile != "" {
 		if _, err := os.Stat(p.CertFile); os.IsNotExist(err) {
-			return fmt.Errorf("MQTT client certificate file %s does not exist", p.CertFile)
+			return fmt.Errorf("client certFile %s does not exist", p.CertFile)
 		}
 
 		if _, err := os.Stat(p.KeyFile); os.IsNotExist(err) {
-			return fmt.Errorf("MQTT client key file %s does not exist", p.KeyFile)
+			return fmt.Errorf("client keyFile %s does not exist", p.KeyFile)
 		}
 	}
 	return nil
 }
 
-//
-// Device information container (has one or many resources)
-//
 type Device struct {
 	configPath  string
 	Name        string
 	Description string
 	Meta        map[string]interface{}
-	Ttl         uint // follow dgw's ttl?
 	Agent       Agent
 	ContentType string
 	Protocols   []DeviceProtocolConfig
@@ -282,43 +275,16 @@ func (d *Device) validate() error {
 	if strings.HasPrefix(d.Name, "/") || strings.HasSuffix(d.Name, "/") {
 		return fmt.Errorf("name should not start or end with slash: %s", d.Name)
 	}
-	for i := range d.Protocols {
 
-		switch strings.ToUpper(d.Protocols[i].Type) {
-		case MQTTProtocolType:
-			mqtt := d.Protocols[i].MQTT
-			if mqtt.PubTopic == "" && mqtt.SubTopic == "" {
-				return fmt.Errorf("MQTT pubTopic and subTopic are both empty")
-			}
-			if mqtt.PubTopic != "" && mqtt.SubTopic != "" && mqtt.PubTopic == mqtt.SubTopic {
-				return fmt.Errorf("MQTT pubTopic and subTopic must not be equal")
-			}
-			if mqtt.PubQoS > 2 {
-				return fmt.Errorf("MQTT pubQoS should be [0-2], not %d", mqtt.PubQoS)
-			}
-			if mqtt.SubQoS > 2 {
-				return fmt.Errorf("MQTT subQoS should be [0-2], not %d", mqtt.SubQoS)
-			}
-			if mqtt.Client != nil {
-				err := mqtt.Client.Validate()
-				if err != nil {
-					return fmt.Errorf("MQTT client config is invalid: %s", err)
-				}
-			}
-		case HTTPProtocolType:
-			httpP := d.Protocols[i].HTTP
+	err := d.Agent.validate()
+	if err != nil {
+		return fmt.Errorf("agent: %s", err)
+	}
 
-			if len(httpP.Methods) == 0 {
-				return fmt.Errorf("HTTP methods not set")
-			}
-			for _, method := range httpP.Methods {
-				if strings.ToUpper(method) != http.MethodGet && strings.ToUpper(method) != http.MethodPut {
-					return fmt.Errorf("HTTP methods should be GET or PUT, not %s", method)
-				}
-			}
-
-		default:
-			return fmt.Errorf("unknown protocol: %s", d.Protocols[i].Type)
+	for pi := range d.Protocols {
+		err := d.Protocols[pi].validate()
+		if err != nil {
+			return fmt.Errorf("protocols[%d]: %s", pi, err)
 		}
 	}
 	return nil
@@ -330,13 +296,53 @@ type DeviceProtocolConfig struct {
 	*HTTP
 }
 
+func (p *DeviceProtocolConfig) validate() error {
+	switch strings.ToUpper(p.Type) {
+	case MQTTProtocolType:
+		err := p.MQTT.validate()
+		if err != nil {
+			return fmt.Errorf("mqtt: %s", err)
+		}
+	case HTTPProtocolType:
+		err := p.HTTP.validate()
+		if err != nil {
+			return fmt.Errorf("http: %s", err)
+		}
+	default:
+		return fmt.Errorf("unknown type: %s", p.Type)
+	}
+	return nil
+}
+
 type MQTT struct {
 	PubTopic    string              `json:"pubTopic"`
 	PubRetained bool                `json:"pubRetained"` // default = false
 	PubQoS      uint8               `json:"pubQoS"`      // default = 0
 	SubTopic    string              `json:"subTopic"`
 	SubQoS      uint8               `json:"subQoS"` // default = 0
-	Client      *MqttProtocolConfig `json:"client"` // overrides default
+	Client      *MQTTProtocolConfig `json:"client"` // overrides default
+}
+
+func (m *MQTT) validate() error {
+	if m.PubTopic == "" && m.SubTopic == "" {
+		return fmt.Errorf("pubTopic and subTopic are both empty")
+	}
+	if m.PubTopic != "" && m.SubTopic != "" && m.PubTopic == m.SubTopic {
+		return fmt.Errorf("pubTopic and subTopic must not be equal")
+	}
+	if m.PubQoS > 2 {
+		return fmt.Errorf("pubQoS should be [0-2], not %d", m.PubQoS)
+	}
+	if m.SubQoS > 2 {
+		return fmt.Errorf("subQoS should be [0-2], not %d", m.SubQoS)
+	}
+	if m.Client != nil {
+		err := m.Client.validate()
+		if err != nil {
+			return fmt.Errorf("client: %s", err)
+		}
+	}
+	return nil
 }
 
 type HTTP struct {
@@ -344,37 +350,64 @@ type HTTP struct {
 	Path    string   `json:"path"`
 }
 
-func (d *Device) DeviceName(name string) string {
-	return fmt.Sprintf("%s/%s", d.Name, name)
+func (h *HTTP) validate() error {
+	if len(h.Methods) == 0 {
+		return fmt.Errorf("methods not set")
+	}
+	for _, method := range h.Methods {
+		if strings.ToUpper(method) != http.MethodGet && strings.ToUpper(method) != http.MethodPut {
+			return fmt.Errorf("methods should be GET or PUT, not %s", method)
+		}
+	}
+	return nil
 }
+
+// Exec types
+const (
+	ExecTypeTask    = "task"    // Executes, outputs data, exits
+	ExecTypeTimer   = "timer"   // Executes periodically (see Interval)
+	ExecTypeService = "service" // Constantly running and emitting output
+)
 
 //
 // Description of how to run an agent that communicates with hardware
 //
 type Agent struct {
-	Type     ExecType
+	Type     string
 	Interval time.Duration
 	Dir      string
 	Exec     string
 }
 
-type ExecType string
+func (a *Agent) validate() error {
+	if a.Type != ExecTypeTask && a.Type != ExecTypeTimer && a.Type != ExecTypeService {
+		return fmt.Errorf("invalid exec type: %s", a.Type)
+	}
+	if a.Exec == "" {
+		return fmt.Errorf("exec command no set")
+	}
+	return nil
+}
 
-const (
-	// Executes, outputs data, exits
-	ExecTypeTask ExecType = "task"
-	// Executes periodically (see Interval)
-	ExecTypeTimer ExecType = "timer"
-	// Constantly running and emitting output
-	ExecTypeService ExecType = "service"
-)
-
+// TODO move to a package
 // Service Catalogs Registration Config
 type ServiceCatalogConf struct {
 	Discover bool          `json:"discover"`
 	Endpoint string        `json:"endpoint"`
 	TTL      uint          `json:"ttl"`
 	Auth     *ObtainerConf `json:"auth"`
+}
+
+func (c *ServiceCatalogConf) validate() error {
+	if c.Endpoint != "" {
+		if c.Auth != nil {
+			err := c.Auth.Validate()
+			if err != nil {
+				return fmt.Errorf("auth: %s", err)
+			}
+		}
+	}
+	return nil
 }
 
 // Ticket Validator Config
@@ -466,6 +499,7 @@ func (c ObtainerConf) Validate() error {
 	return nil
 }
 
+// TODO move to a package
 func (c *Config) discoverBrokerEndpoint(id string) (string, error) {
 
 	logger.Printf("Discovering endpoint for broker %s...", id)

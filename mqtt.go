@@ -13,7 +13,7 @@ import (
 	paho "github.com/eclipse/paho.mqtt.golang"
 )
 
-// MQTTConnector provides paho protocol connectivity
+// MQTTConnector provides MQTT protocol connectivity
 type MQTTConnector struct {
 	pubCh                  chan AgentResponse
 	subCh                  chan<- DataRequest
@@ -55,7 +55,7 @@ func newMQTTConnector(conf *Config, dataReqCh chan<- DataRequest) (*MQTTConnecto
 				mqtt := conf.devices[di].Protocols[pi].MQTT
 				var client mqttClient
 				client.uri = mqtt.Client.URI
-				client.clientID = fmt.Sprintf("dgw-%s-%d-%d", conf.Id, di, pi)
+				client.clientID = fmt.Sprintf("dgw-%s-%d-%d", conf.ID, di, pi)
 				if mqtt.PubTopic != "" {
 					client.publisher.topic = mqtt.PubTopic
 					client.publisher.qos = mqtt.PubQoS
@@ -92,7 +92,6 @@ func newMQTTConnector(conf *Config, dataReqCh chan<- DataRequest) (*MQTTConnecto
 	}, nil
 }
 
-// TODO return from constructor
 func (c *MQTTConnector) dataInbox() chan<- AgentResponse {
 	return c.pubCh
 }
@@ -104,7 +103,6 @@ func (c *MQTTConnector) start() {
 			go c.deviceClients[i][j].connect(0)
 		}
 	}
-
 	go c.publisher()
 }
 
@@ -148,22 +146,6 @@ func (c *MQTTConnector) publisher() {
 	}
 }
 
-// processes incoming messages from the broker and writes DataRequets to the subCh
-func (s *subscriber) messageHandler(_ paho.Client, msg paho.Message) {
-	logger.Printf("MQTTConnector.messageHandler() message received: topic: %v payload: %v\n", msg.Topic(), msg.Payload())
-
-	// Send Data Request
-	dr := DataRequest{
-		ResourceId: s.deviceName,
-		Type:       DataRequestTypeWrite,
-		Arguments:  msg.Payload(),
-		Reply:      nil, // there will be **no reply** on the request/command execution
-	}
-	logger.Printf("MQTTConnector.messageHandler() Submitting data request %#v", dr)
-	s.subCh <- dr
-	// no response - blocking on waiting for one
-}
-
 func (c *MQTTConnector) stop() {
 	logger.Println("MQTTConnector.stop()")
 	for i := range c.deviceClients {
@@ -175,81 +157,13 @@ func (c *MQTTConnector) stop() {
 	}
 }
 
-func (client *mqttClient) connect(backOff time.Duration) {
-	for {
-		var backOffMessage string
-		if backOff != 0 {
-			backOffMessage = fmt.Sprintf(" backOff %v", backOff)
-		}
-		logger.Printf("MQTTConnector.connect() %s: connecting as %s%s", client.uri, client.clientID, backOffMessage)
-		time.Sleep(backOff)
-		if client.paho.IsConnected() {
-			break
-		}
-		token := client.paho.Connect()
-		token.Wait()
-		if token.Error() == nil {
-			break
-		}
-		logger.Printf("MQTTConnector.connect() %s: failed to connect: %v", client.uri, token.Error().Error())
-		if backOff == 0 {
-			backOff = 10 * time.Second
-		} else if backOff <= MQTTMaxReconnectInterval {
-			backOff *= 2
-			if backOff > MQTTMaxReconnectInterval {
-				backOff = MQTTMaxReconnectInterval
-			}
-		}
-	}
-}
-
-func (client *mqttClient) onConnected(_ paho.Client) {
-	logger.Printf("MQTTConnector.onConnected() %s: connected.", client.uri)
-
-	// subscribe topic is set
-	if client.subscriber.topic != "" {
-		logger.Printf("MQTTConnector.onConnected() %s: will subscribe to %s", client.uri, client.subscriber.topic)
-		client.paho.Subscribe(client.subscriber.topic, client.subscriber.qos, client.subscriber.messageHandler)
-	} else {
-		logger.Printf("MQTTConnector.onConnected() %s: no subscriptions.", client.uri)
-	}
-
-	// publish buffered messages to the broker
-	bufferCap := cap(client.offlineBufferCh)
-	for len(client.offlineBufferCh) > 0 {
-		resp := <-client.offlineBufferCh
-
-		if resp.IsError {
-			logger.Printf("MQTTConnector.onConnected() %s: data ERROR from agent manager: %s", client.uri, resp.Payload)
-			continue
-		}
-
-		token := client.paho.Publish(client.publisher.topic, client.publisher.qos, client.publisher.retained, resp.Payload)
-		if WaitTimeout > 0 {
-			if published := token.WaitTimeout(WaitTimeout); token.Error() != nil {
-				logger.Printf("MQTTConnector.onConnected() error publishing: %s", token.Error())
-				continue // Note: this payload will be lost
-			} else if !published {
-				logger.Println("MQTTConnector.onConnected() publish timeout. Message may be lost.")
-				continue
-			}
-		}
-		logger.Printf("MQTTConnector.onConnected() published buffered message to %s (%d/%d)", client.publisher.topic, len(client.offlineBufferCh)+1, bufferCap)
-	}
-}
-
-func (client *mqttClient) onConnectionLost(_ paho.Client, reason error) {
-	logger.Printf("MQTTConnector.onConnectionLost() %s: %s", client.uri, reason.Error())
-	go client.connect(0)
-}
-
-func (client *mqttClient) configure(config *MqttProtocolConfig) error {
+func (client *mqttClient) configure(config *MQTTProtocolConfig) error {
 	options := paho.NewClientOptions().
 		AddBroker(config.URI).
 		SetClientID(client.clientID).
 		SetCleanSession(true).
-		SetConnectionLostHandler(client.onConnectionLost).
-		SetOnConnectHandler(client.onConnected).
+		SetConnectionLostHandler(client.onConnectionLostHandler).
+		SetOnConnectHandler(client.onConnectHandler).
 		SetAutoReconnect(false) // we take care of re-connect ourselves -> paho's MaxReconnectInterval has no effect
 
 	// Username/password authentication
@@ -289,4 +203,88 @@ func (client *mqttClient) configure(config *MqttProtocolConfig) error {
 
 	client.paho = paho.NewClient(options)
 	return nil
+}
+
+func (client *mqttClient) connect(backOff time.Duration) {
+	for {
+		var backOffMessage string
+		if backOff != 0 {
+			backOffMessage = fmt.Sprintf(" backOff %v", backOff)
+		}
+		logger.Printf("MQTTConnector.connect() %s: connecting as %s%s", client.uri, client.clientID, backOffMessage)
+		time.Sleep(backOff)
+		if client.paho.IsConnected() {
+			break
+		}
+		token := client.paho.Connect()
+		token.Wait()
+		if token.Error() == nil {
+			break
+		}
+		logger.Printf("MQTTConnector.connect() %s: failed to connect: %v", client.uri, token.Error().Error())
+		if backOff == 0 {
+			backOff = 10 * time.Second
+		} else if backOff <= MQTTMaxReconnectInterval {
+			backOff *= 2
+			if backOff > MQTTMaxReconnectInterval {
+				backOff = MQTTMaxReconnectInterval
+			}
+		}
+	}
+}
+
+func (client *mqttClient) onConnectHandler(_ paho.Client) {
+	logger.Printf("MQTTConnector.onConnected() %s: connected.", client.uri)
+
+	// subscribe topic is set
+	if client.subscriber.topic != "" {
+		logger.Printf("MQTTConnector.onConnected() %s: will subscribe to %s", client.uri, client.subscriber.topic)
+		client.paho.Subscribe(client.subscriber.topic, client.subscriber.qos, client.subscriber.messageHandler)
+	} else {
+		logger.Printf("MQTTConnector.onConnected() %s: no subscriptions.", client.uri)
+	}
+
+	// publish buffered messages to the broker
+	bufferCap := cap(client.offlineBufferCh)
+	for len(client.offlineBufferCh) > 0 {
+		resp := <-client.offlineBufferCh
+
+		if resp.IsError {
+			logger.Printf("MQTTConnector.onConnected() %s: data ERROR from agent manager: %s", client.uri, resp.Payload)
+			continue
+		}
+
+		token := client.paho.Publish(client.publisher.topic, client.publisher.qos, client.publisher.retained, resp.Payload)
+		if WaitTimeout > 0 {
+			if published := token.WaitTimeout(WaitTimeout); token.Error() != nil {
+				logger.Printf("MQTTConnector.onConnected() error publishing: %s", token.Error())
+				continue // Note: this payload will be lost
+			} else if !published {
+				logger.Println("MQTTConnector.onConnected() publish timeout. Message may be lost.")
+				continue
+			}
+		}
+		logger.Printf("MQTTConnector.onConnected() published buffered message to %s (%d/%d)", client.publisher.topic, len(client.offlineBufferCh)+1, bufferCap)
+	}
+}
+
+func (client *mqttClient) onConnectionLostHandler(_ paho.Client, reason error) {
+	logger.Printf("MQTTConnector.onConnectionLost() %s: %s", client.uri, reason.Error())
+	go client.connect(0)
+}
+
+// processes incoming messages from the broker and writes DataRequets to the subCh
+func (s *subscriber) messageHandler(_ paho.Client, msg paho.Message) {
+	logger.Printf("MQTTConnector.messageHandler() message received: topic: %v payload: %v\n", msg.Topic(), msg.Payload())
+
+	// Send Data Request
+	dr := DataRequest{
+		ResourceId: s.deviceName,
+		Type:       DataRequestTypeWrite,
+		Arguments:  msg.Payload(),
+		Reply:      nil, // there will be **no reply** on the request/command execution
+	}
+	logger.Printf("MQTTConnector.messageHandler() Submitting data request %#v", dr)
+	s.subCh <- dr
+	// no response - blocking on waiting for one
 }

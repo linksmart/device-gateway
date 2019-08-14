@@ -12,20 +12,10 @@ import (
 	"github.com/linksmart/service-catalog/client"
 )
 
-// TODO: register via MQTT
-
 func registerInServiceCatalog(conf *Config, apiDiscovery <-chan string) (func() error, error) {
 	if conf.ServiceCatalog.Endpoint == "" {
 		return func() error { return nil }, nil
 	}
-
-	//var HTTPEndpoint, MQTTEndpoint string
-	//if conf.Protocols.HTTP != nil {
-	//	HTTPEndpoint = conf.Protocols.HTTP.PublicEndpoint
-	//}
-	//if conf.Protocols.MQTT != nil {
-	//	MQTTEndpoint = conf.Protocols.MQTT.URI
-	//}
 
 	var deviceNames []string
 	for _, device := range conf.devices {
@@ -33,10 +23,10 @@ func registerInServiceCatalog(conf *Config, apiDiscovery <-chan string) (func() 
 	}
 
 	service := catalog.Service{
-		ID:          conf.Id,
+		ID:          conf.ID,
 		Name:        "_linksmart-dgw._tcp",
 		Description: conf.Description,
-		//APIs:        map[string]string{catalog.APITypeHTTP: RESTEndpoint, catalog.APITypeMQTT: MQTTEndpoint},
+		APIs:        map[string]string{catalog.APITypeHTTP: conf.Protocols.HTTP.PublicEndpoint},
 		Docs: []catalog.Doc{{
 			Description: "Documentation",
 			URL:         "https://docs.linksmart.eu/display/DGW",
@@ -87,7 +77,7 @@ func registerInServiceCatalog(conf *Config, apiDiscovery <-chan string) (func() 
 func devicesToServices(conf *Config) (services []catalog.Service) {
 	for _, device := range conf.devices {
 		var service catalog.Service
-		service.ID = conf.Id + "/" + device.Name
+		service.ID = conf.ID + "/" + device.Name
 		service.Name = DNSSDServiceTypeDGWDevice
 		service.Description = device.Description
 		service.Meta = device.Meta
