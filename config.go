@@ -16,8 +16,8 @@ import (
 
 	"github.com/linksmart/go-sec/auth/obtainer"
 	"github.com/linksmart/go-sec/authz"
-	sc "github.com/linksmart/service-catalog/catalog"
-	scClient "github.com/linksmart/service-catalog/client"
+	sc "github.com/linksmart/service-catalog/v2/catalog"
+	scClient "github.com/linksmart/service-catalog/v2/client"
 	uuid "github.com/satori/go.uuid"
 )
 

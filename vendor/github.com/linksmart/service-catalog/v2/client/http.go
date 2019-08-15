@@ -10,8 +10,8 @@ import (
 	"net/url"
 
 	"github.com/linksmart/go-sec/auth/obtainer"
-	"github.com/linksmart/service-catalog/catalog"
-	"github.com/linksmart/service-catalog/utils"
+	"github.com/linksmart/service-catalog/v2/catalog"
+	"github.com/linksmart/service-catalog/v2/utils"
 )
 
 type httpClient struct {
@@ -35,6 +35,26 @@ func NewHTTPClient(serverEndpoint string, ticket *obtainer.Client) (*httpClient,
 		serverEndpoint: endpointUrl,
 		ticket:         ticket,
 	}, nil
+}
+
+// Ping returns true if health endpoint responds OK
+func (c *httpClient) Ping() (bool, error) {
+	res, err := utils.HTTPRequest("GET",
+		fmt.Sprintf("%v/health", c.serverEndpoint),
+		nil,
+		nil,
+		c.ticket,
+	)
+	if err != nil {
+		return false, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode == http.StatusOK {
+		return true, nil
+	} else {
+		return false, fmt.Errorf(ErrorMsg(res))
+	}
 }
 
 // Get gets a service
@@ -239,12 +259,11 @@ func (c *httpClient) GetMany(page, perPage int, filter *FilterArgs) ([]catalog.S
 
 // Returns the message field of a resource.Error response
 func ErrorMsg(res *http.Response) string {
-	decoder := json.NewDecoder(res.Body)
 
 	var e catalog.Error
-	err := decoder.Decode(&e)
+	err := json.NewDecoder(res.Body).Decode(&e)
 	if err != nil {
-		return res.Status
+		return fmt.Sprintf("error decoding: %s", err)
 	}
 	return fmt.Sprintf("(%d) %s", res.StatusCode, e.Message)
 }

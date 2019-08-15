@@ -8,8 +8,8 @@ import (
 
 	_ "github.com/linksmart/go-sec/auth/keycloak/obtainer"
 	"github.com/linksmart/go-sec/auth/obtainer"
-	"github.com/linksmart/service-catalog/catalog"
-	"github.com/linksmart/service-catalog/client"
+	"github.com/linksmart/service-catalog/v2/catalog"
+	"github.com/linksmart/service-catalog/v2/client"
 )
 
 func registerInServiceCatalog(conf *Config, apiDiscovery <-chan string) (func() error, error) {
