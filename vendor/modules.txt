@@ -4,10 +4,10 @@ github.com/ancientlore/go-avltree
 github.com/codegangsta/negroni
 # github.com/dgrijalva/jwt-go v3.2.0+incompatible
 github.com/dgrijalva/jwt-go
-# github.com/eclipse/paho.mqtt.golang v1.1.0
+# github.com/eclipse/paho.mqtt.golang v1.2.0
 github.com/eclipse/paho.mqtt.golang
 github.com/eclipse/paho.mqtt.golang/packets
-# github.com/farshidtz/elog v0.9.0
+# github.com/farshidtz/elog v1.0.1
 github.com/farshidtz/elog
 # github.com/farshidtz/mqtt-match v1.0.1
 github.com/farshidtz/mqtt-match
@@ -25,11 +25,10 @@ github.com/linksmart/go-sec/auth/keycloak/validator
 github.com/linksmart/go-sec/auth/obtainer
 github.com/linksmart/go-sec/auth/validator
 github.com/linksmart/go-sec/authz
-# github.com/linksmart/service-catalog v0.0.0-20190807153650-e0219d877571
-github.com/linksmart/service-catalog/catalog
-github.com/linksmart/service-catalog/client
-github.com/linksmart/service-catalog/discovery
-github.com/linksmart/service-catalog/utils
+# github.com/linksmart/service-catalog/v2 v2.4.0
+github.com/linksmart/service-catalog/v2/catalog
+github.com/linksmart/service-catalog/v2/client
+github.com/linksmart/service-catalog/v2/utils
 # github.com/miekg/dns v0.0.0-20170818131442-e4205768578d
 github.com/miekg/dns
 # github.com/oleksandr/bonjour v0.0.0-20160508152359-5dcf00d8b228

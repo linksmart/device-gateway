@@ -11,8 +11,8 @@ github.com/eclipse/paho.mqtt.golang v1.1.0 h1:Em29HD1CwLHdRFnX7yfg+kBjHHw6DSDok9
 github.com/eclipse/paho.mqtt.golang v1.1.0/go.mod h1:H9keYFcgq3Qr5OUJm/JZI/i6U7joQ8SYLhZwfeOo6Ts=
 github.com/eclipse/paho.mqtt.golang v1.2.0 h1:1F8mhG9+aO5/xpdtFkW4SxOJB67ukuDC3t2y2qayIX0=
 github.com/eclipse/paho.mqtt.golang v1.2.0/go.mod h1:H9keYFcgq3Qr5OUJm/JZI/i6U7joQ8SYLhZwfeOo6Ts=
-github.com/farshidtz/elog v0.9.0 h1:pfNMCBpqAT/Uky6aNwqcTzZBHRfsYMp9vd1LmuBOQ6o=
-github.com/farshidtz/elog v0.9.0/go.mod h1:wsS8gMzj561vyWJviCBUeK6YAy9CdKmsH+moY5DA+Ms=
+github.com/farshidtz/elog v1.0.1 h1:GXdAmbHVyJ5l6V37gLK+Pedjd/sMRt0RPLzB/HcVFj0=
+github.com/farshidtz/elog v1.0.1/go.mod h1:OXTASC4gfW1KTSCg/qieXdyo9SoUA+c4U8qGkp6DW9I=
 github.com/farshidtz/mqtt-match v1.0.1 h1:VEBojQL9P5F7E3gu9XULIUZnzZknn7byF2rJ7RX20cQ=
 github.com/farshidtz/mqtt-match v1.0.1/go.mod h1:Kwf4JfzMhR3aPmVY5jqTkLXY/E3DgHsRlCUekyqdQHw=
 github.com/fsnotify/fsnotify v1.4.7 h1:IXs+QLmnXW2CcXuY+8Mzv/fWEsPGWxqefPtCP5CnV9I=
@@ -34,8 +34,8 @@ github.com/kelseyhightower/envconfig v1.3.0 h1:IvRS4f2VcIQy6j4ORGIf9145T/AsUB+oY
 github.com/kelseyhightower/envconfig v1.3.0/go.mod h1:cccZRl6mQpaq41TPp5QxidR+Sa3axMbJDNb//FQX6Gg=
 github.com/linksmart/go-sec v1.0.1 h1:UNeRj81/KHCy4hkFcZn7x5N/nM+uNxe+xsLBQzNF7kg=
 github.com/linksmart/go-sec v1.0.1/go.mod h1:bTksBzP6fCEwIM43z8m3jSRa4YIAWdUwMBYjcoftm1c=
-github.com/linksmart/service-catalog v0.0.0-20190814153706-1a461aa86472 h1:VnCXEGEkOg2rohVUqo4dGHrsgNJO8cHJ+cpZqR01eeQ=
-github.com/linksmart/service-catalog v0.0.0-20190814153706-1a461aa86472/go.mod h1:3Tc0uFAMi0M6DOEBr4kAbzwWDuj3PaYzxYXWcdodW/s=
+github.com/linksmart/service-catalog/v2 v2.4.0 h1:VVInC2fFsvf5I8HeXJ2YviG20Bh13UKJbM6B5Hd118A=
+github.com/linksmart/service-catalog/v2 v2.4.0/go.mod h1:aIfziWy3rusDlaoEIeoML6XV68RVFdNm+i58X9inXcY=
 github.com/miekg/dns v0.0.0-20170818131442-e4205768578d h1:M1nGptTlM6l6aT5MUYA5XExwSjnIPHA+xEOWobbMU6g=
 github.com/miekg/dns v0.0.0-20170818131442-e4205768578d/go.mod h1:W1PPwlIAgtquWBMBEV9nkV9Cazfe8ScdGz/Lj7v3Nrg=
 github.com/oleksandr/bonjour v0.0.0-20160508152359-5dcf00d8b228 h1:Cvfd2dOlXIPTeEkOT/h8PyK4phBngOM4at9/jlgy7d4=
