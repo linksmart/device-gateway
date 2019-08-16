@@ -20,8 +20,7 @@ deploy:
   - provider: script
     script: curl -s https://raw.githubusercontent.com/linksmart/ci-scripts/master/go/go-build.sh | bash
     on:
-      condition: $TRAVIS_BRANCH == "master" || -n $TRAVIS_TAG
-  # releases
+      tags: true
   - provider: releases
     api_key: $GITHUB_KEY
     file_glob: true
@@ -32,15 +31,4 @@ deploy:
     overwrite: true
     on:
       tags: true
-  # snapshots
-  - provider: releases
-    api_key: $GITHUB_KEY
-    file_glob: true
-    file:
-      - bin/*
-      - sample_conf.tar
-    skip_cleanup: true
-    overwrite: true
-    draft: true
-    on:
-      tags: master
+
