@@ -125,6 +125,9 @@ func (c *Config) revise() {
 					path := "/" + c.devices[di].Name
 					c.devices[di].Protocols[pi].HTTP.Path = path
 					logger.Printf("├─ %s.protocols[%d]: HTTP path not set. Used /<device-name>: %s", c.devices[di].Name, pi, path)
+				} else if !strings.HasPrefix(c.devices[di].Protocols[pi].HTTP.Path, "/") {
+					c.devices[di].Protocols[pi].HTTP.Path = "/" + c.devices[di].Protocols[pi].HTTP.Path
+					logger.Printf("├─ %s.protocols[%d]: Added leading slash to HTTP path: %s", c.devices[di].Name, pi, c.devices[di].Protocols[pi].HTTP.Path)
 				}
 			case MQTTProtocolType:
 				if c.devices[di].Protocols[pi].MQTT.Client == nil {
