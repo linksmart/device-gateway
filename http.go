@@ -146,18 +146,16 @@ func (api *RESTfulAPI) mountResources() {
 		for i := range device.Protocols {
 			if device.Protocols[i].Type == HTTPProtocolType {
 				protocol := device.Protocols[i].HTTP
-				logger.Println("RESTfulAPI.mountResources() Mounting resource:", protocol.Path)
-				rid := device.Name
 				for _, method := range protocol.Methods {
 					switch method {
 					case "GET":
 						api.router.Methods("GET").Path(protocol.Path).Handler(
-							api.commonHandlers.ThenFunc(api.createResourceGetHandler(rid)))
+							api.commonHandlers.ThenFunc(api.createResourceGetHandler(device.Name)))
 					case "PUT":
 						api.router.Methods("PUT").Path(protocol.Path).Handler(
-							api.commonHandlers.ThenFunc(api.createResourcePutHandler(rid)))
+							api.commonHandlers.ThenFunc(api.createResourcePutHandler(device.Name)))
 					}
-					logger.Printf("Added HTTP %s handler: %s", method, protocol.Path)
+					logger.Printf("RESTfulAPI.mountResources() Added %s handler for %s: %s", method, device.Name, protocol.Path)
 				}
 			}
 		}
