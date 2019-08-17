@@ -5,7 +5,6 @@ package main
 import (
 	"io"
 	"os/exec"
-	"strings"
 	"time"
 )
 
@@ -120,18 +119,17 @@ func (am *AgentManager) start() {
 				if !ok {
 					continue
 				}
-				// Publish only if resource supports MQTT (and is task/service)
-				for _, protocol := range device.Protocols {
-					if strings.ToUpper(protocol.Type) == MQTTProtocolType {
-						if device.Agent.Type == ExecTypeTimer || device.Agent.Type == ExecTypeService {
-							// Send data with a timeout (to avoid blocking data receival)
+				// Publish only if resource is task/service and exposes at least one MQTT publisher
+				if device.Agent.Type == ExecTypeTimer || device.Agent.Type == ExecTypeService {
+					for i := range device.Protocols {
+						if device.Protocols[i].Type == MQTTProtocolType && device.Protocols[i].MQTT.pub {
 							select {
 							case am.publishOutbox <- resp:
-							//case <-time.Tick(time.Duration(2) * time.Second):
-							//	logger.Printf("AgentManager: WARNING timeout while publishing data to publishOutbox")
+								// response is sent
 							default:
 								logger.Printf("AgentManager.start() WARNING: publishOutbox is full. Skipping current value...")
 							}
+							break
 						}
 					}
 				}

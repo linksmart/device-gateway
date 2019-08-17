@@ -130,6 +130,12 @@ func (c *Config) revise() {
 					logger.Printf("├─ %s.protocols[%d]: Added leading slash to HTTP path: %s", c.devices[di].Name, pi, c.devices[di].Protocols[pi].HTTP.Path)
 				}
 			case MQTTProtocolType:
+				if c.devices[di].Protocols[pi].MQTT.PubTopic != "" {
+					c.devices[di].Protocols[pi].MQTT.pub = true
+				}
+				if c.devices[di].Protocols[pi].MQTT.SubTopic != "" {
+					c.devices[di].Protocols[pi].MQTT.sub = true
+				}
 				if c.devices[di].Protocols[pi].MQTT.Client == nil {
 					c.devices[di].Protocols[pi].MQTT.Client = &c.Protocols.MQTT
 					logger.Printf("├─ %s.protocols[%d]: MQTT client not set. Used global client: %s", c.devices[di].Name, pi, c.Protocols.MQTT.URI)
@@ -318,9 +324,11 @@ func (p *DeviceProtocolConfig) validate() error {
 }
 
 type MQTT struct {
-	PubTopic    string              `json:"pubTopic"`
-	PubRetained bool                `json:"pubRetained"` // default = false
-	PubQoS      uint8               `json:"pubQoS"`      // default = 0
+	pub         bool
+	PubTopic    string `json:"pubTopic"`
+	PubRetained bool   `json:"pubRetained"` // default = false
+	PubQoS      uint8  `json:"pubQoS"`      // default = 0
+	sub         bool
 	SubTopic    string              `json:"subTopic"`
 	SubQoS      uint8               `json:"subQoS"` // default = 0
 	Client      *MQTTProtocolConfig `json:"client"` // overrides default

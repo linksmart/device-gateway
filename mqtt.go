@@ -25,8 +25,8 @@ type mqttClient struct {
 	uri             string
 	clientID        string
 	paho            paho.Client
-	publisher       publisher
-	subscriber      subscriber
+	publisher       *publisher
+	subscriber      *subscriber
 	offlineBufferCh chan AgentResponse
 }
 
@@ -56,16 +56,20 @@ func newMQTTConnector(conf *Config, dataReqCh chan<- DataRequest) (*MQTTConnecto
 				var client mqttClient
 				client.uri = mqtt.Client.URI
 				client.clientID = fmt.Sprintf("dgw-%s-%d-%d", conf.ID, di, pi)
-				if mqtt.PubTopic != "" {
-					client.publisher.topic = mqtt.PubTopic
-					client.publisher.qos = mqtt.PubQoS
-					client.publisher.retained = mqtt.PubRetained
+				if mqtt.pub {
+					client.publisher = &publisher{
+						mqtt.PubTopic,
+						mqtt.PubQoS,
+						mqtt.PubRetained,
+					}
 				}
-				if mqtt.SubTopic != "" {
-					client.subscriber.topic = mqtt.SubTopic
-					client.subscriber.qos = mqtt.SubQoS
-					client.subscriber.subCh = dataReqCh
-					client.subscriber.deviceName = conf.devices[di].Name
+				if mqtt.sub {
+					client.subscriber = &subscriber{
+						mqtt.SubTopic,
+						mqtt.SubQoS,
+						dataReqCh,
+						conf.devices[di].Name,
+					}
 				}
 				client.offlineBufferCh = make(chan AgentResponse, mqtt.Client.OfflineBuffer)
 
@@ -112,6 +116,9 @@ func (c *MQTTConnector) publisher() {
 		logger.Debugln("MQTTConnector.publisher() message:", string(resp.Payload))
 		clients := c.deviceClients[resp.ResourceId]
 		for _, client := range clients {
+			if client.publisher == nil { // this client has no publisher
+				continue
+			}
 			if !client.paho.IsConnected() {
 				bufferCap := cap(client.offlineBufferCh)
 				if bufferCap == 0 {
@@ -236,12 +243,9 @@ func (client *mqttClient) connect(backOff time.Duration) {
 func (client *mqttClient) onConnectHandler(_ paho.Client) {
 	logger.Printf("MQTTConnector.onConnected() %s: connected.", client.uri)
 
-	// subscribe topic is set
-	if client.subscriber.topic != "" {
+	if client.subscriber != nil { // client needs to subscribe
 		logger.Printf("MQTTConnector.onConnected() %s: will subscribe to %s", client.uri, client.subscriber.topic)
 		client.paho.Subscribe(client.subscriber.topic, client.subscriber.qos, client.subscriber.messageHandler)
-	} else {
-		logger.Printf("MQTTConnector.onConnected() %s: no subscriptions.", client.uri)
 	}
 
 	// publish buffered messages to the broker
