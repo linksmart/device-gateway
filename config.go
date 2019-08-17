@@ -138,7 +138,11 @@ func (c *Config) revise() {
 				}
 				if c.devices[di].Protocols[pi].MQTT.Client == nil {
 					c.devices[di].Protocols[pi].MQTT.Client = &c.Protocols.MQTT
-					logger.Printf("├─ %s.protocols[%d]: MQTT client not set. Used global client: %s", c.devices[di].Name, pi, c.Protocols.MQTT.URI)
+					endpoint := c.Protocols.MQTT.URI
+					if endpoint == "" {
+						endpoint = "discover " + c.Protocols.MQTT.Discover
+					}
+					logger.Printf("├─ %s.protocols[%d]: MQTT client not set. Used global endpoint: %s", c.devices[di].Name, pi, endpoint)
 				}
 			}
 		}
@@ -384,18 +388,21 @@ const (
 // Description of how to run an agent that communicates with hardware
 //
 type Agent struct {
-	Type     string
-	Interval time.Duration
-	Dir      string
-	Exec     string
+	Type          string
+	TimerInterval uint
+	Dir           string
+	Exec          string
 }
 
 func (a *Agent) validate() error {
 	if a.Type != ExecTypeTask && a.Type != ExecTypeTimer && a.Type != ExecTypeService {
 		return fmt.Errorf("invalid exec type: %s", a.Type)
 	}
+	if a.Type == ExecTypeTimer && a.TimerInterval == 0 {
+		return fmt.Errorf("exec type is timer but timerInternal is not set")
+	}
 	if a.Exec == "" {
-		return fmt.Errorf("exec command no set")
+		return fmt.Errorf("exec command not set")
 	}
 	return nil
 }

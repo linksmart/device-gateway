@@ -277,7 +277,7 @@ func (am *AgentManager) createTimer(resourceId string, agent Agent) {
 		logger.Printf("AgentManager.createTimer() ERROR: %s is not %s but %s", resourceId, ExecTypeTimer, agent.Type)
 		return
 	}
-	ticker := time.NewTicker(agent.Interval * time.Second)
+	ticker := time.NewTicker(time.Duration(agent.TimerInterval) * time.Second)
 	go func(rid string, a Agent) {
 		for ; true; <-ticker.C {
 			am.agentInbox <- am.executeTask(rid, a, nil)
